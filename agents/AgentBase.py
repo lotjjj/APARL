@@ -23,12 +23,16 @@ class AgentBase(ABC):
     def explore(self, horizon_len: int):
         pass
 
-    # @abstractmethod
-    # def save_model(self):
-    #     pass
-    # @abstractmethod
-    # def load_model(self):
-    #     pass
+    @abstractmethod
+    def save_model(self):
+        pass
+    @abstractmethod
+    def load_model(self, path):
+        pass
+
+    @property
+    def _check_point(self):
+        return {}
 
     def optimizer_backward(self, optimizer: torch.optim.Optimizer , loss: torch.Tensor):
         optimizer.zero_grad()

@@ -91,7 +91,7 @@ class AgentPPO(AgentAC):
 
             observations_batch = observations[ids0,ids1]
             actions_batch = actions[ids0,ids1]
-            unmasks_batch = unmasks[ids0,ids1]
+            # unmasks_batch = unmasks[ids0,ids1]
             log_probs_batch = log_probs[ids0,ids1]
             advantages_batch = advantages[ids0,ids1]
             reward_sums_batch = reward_sums[ids0,ids1]
@@ -116,6 +116,31 @@ class AgentPPO(AgentAC):
             actor_losses[_] = actor_loss.item()
             critic_losses[_] = critic_loss.item()
         return actor_losses.mean().cpu().item(), critic_losses.mean().cpu().item()
+
+    @property
+    def _check_point(self):
+        check_point = {
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict(),
+            'actor_optimizer': self.actor_optimizer.state_dict(),
+            'critic_optimizer': self.critic_optimizer.state_dict(),
+        }
+        return check_point
+
+    def save_model(self):
+        torch.save(self._check_point, self.config.save_path)
+
+    def load_model(self, path = None):
+        if path is None:
+            path = self.config.save_path
+        try:
+            check_point = torch.load(path)
+            self.actor.load_state_dict(check_point['actor'])
+            self.critic.load_state_dict(check_point['critic'])
+            self.actor_optimizer.load_state_dict(check_point['actor_optimizer'])
+            self.critic_optimizer.load_state_dict(check_point['critic_optimizer'])
+        except Exception as e:
+            print(f'No such model')
 
 from modules.Extractor import FlattenExtractor
 from modules.Head import ContinuousPolicyHead, DiscretePolicyHead

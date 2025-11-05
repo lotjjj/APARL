@@ -142,6 +142,9 @@ if __name__ == '__main__':
 
         pbar.set_postfix(actor_loss=actor_loss, critic_loss=critic_loss)
 
+        if _ % 20 == 0:
+            agent.save_model()
+
     envs.close()
 
 
