@@ -50,12 +50,12 @@ class AgentAC(AgentBase, ABC):
             dtype=torch.float32,device=self.config.device)\
             if not self.config.is_discrete \
             else torch.empty((self.config.horizon_len, self.config.num_envs,),
-                             dtype=torch.int64,device=self.config.device)
+                             dtype=torch.int32,device=self.config.device)
 
         log_probs = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,device=self.config.device)
         rewards = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,device=self.config.device)
         terminations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool,device=self.config.device)
-        truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool,device=self.config.device)
+        truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,device=self.config.device)
         return observations, actions, log_probs, rewards, terminations, truncations
 
     def sample_idx(self):

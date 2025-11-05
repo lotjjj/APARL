@@ -29,7 +29,7 @@ class BasicConfig:
     # model
     policy: str = 'MlpPolicy'
     learning_rate: float = 3e-4
-    max_train_steps: int = 100
+    max_train_steps: int = 100_000
     max_grad_norm: float = 0.5
 
     # cuda > intel.xpu > cpu

@@ -19,8 +19,6 @@ class AgentPPO(AgentAC):
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.config.critic_lr)
 
-
-
     def get_action(self, observation: torch.Tensor):
         actions, log_probs = self.actor.get_action(observation)
         return actions, log_probs
@@ -34,6 +32,7 @@ class AgentPPO(AgentAC):
         observation = self.last_observation
 
         for _ in range(self.config.horizon_len):
+            assert type(observation) == torch.Tensor
             action, log_prob = self.get_action(observation)
             np_action = action.detach().cpu().numpy()
 
@@ -41,11 +40,12 @@ class AgentPPO(AgentAC):
             actions[_] = action
             log_probs[_] = log_prob
 
-            observation, reward, terminations, truncations, infos = env.step(np_action)
+            observation, reward, termination, truncation, info = env.step(np_action)
 
-            rewards[_] = reward
-            terminations[_] = terminations
-            truncations[_] = truncations
+            rewards[_] = torch.from_numpy(reward).to(device=self.config.device)
+            terminations[_] = torch.from_numpy(termination).to(device=self.config.device)
+            truncations[_] = torch.from_numpy(truncation).to(device=self.config.device)
+            observation = torch.from_numpy(observation).to(device=self.config.device)
 
         self.last_observation = observation.to(self.config.device)
         undone = torch.logical_not(terminations)
@@ -64,7 +64,7 @@ class AgentPPO(AgentAC):
         values = self.critic(observations)
         advantages = torch.empty_like(values)
         next_state = self.last_observation.clone()
-        next_value = self.critic(next_state).squeeze(-1)
+        next_value = self.critic(next_state)
 
         advantage = torch.zeros_like(next_value)
 
@@ -97,12 +97,11 @@ class AgentPPO(AgentAC):
             reward_sums_batch = reward_sums[ids0,ids1]
 
             values_batch = self.critic(observations_batch)
-            values_batch = values_batch.squeeze(1)
 
             # actor loss
-            new_logprob_batch, entropy_batch = self.actor.get_logprob_entropy(observations_batch, actions_batch)
+            new_log_prob_batch, entropy_batch = self.actor.get_logprob_entropy(observations_batch, actions_batch)
 
-            ratio = torch.exp(new_logprob_batch - log_probs_batch.detach())
+            ratio = torch.exp(new_log_prob_batch - log_probs_batch.detach())
             surr1 = ratio * advantages_batch
             surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
             actor_loss = -torch.min(surr1, surr2).mean()
@@ -164,17 +163,17 @@ class ActorPPO(nn.Module):
             mu, std = self.forward(observation)
             dist = self.distribution(mu, std)
             action = dist.sample()
-            return self.convert_actions(action), dist.log_prob(action).sum(1)
+            return self.convert_actions(action), dist.log_prob(action)
 
     def get_logprob_entropy(self, observation: torch.Tensor, action: torch.Tensor):
         if self.is_discrete:
             logits = self.forward(observation)
             dist = self.distribution(logits=logits)
-            return dist.log_prob(action).sum(1), dist.entropy().sum(1)
+            return dist.log_prob(action), dist.entropy()
         else:
             mu, std = self.forward(observation)
             dist = self.distribution(mu, std)
-            return dist.log_prob(action).sum(1), dist.entropy().sum(1)
+            return dist.log_prob(action), dist.entropy()
 
     @staticmethod
     def convert_actions(action: torch.Tensor):
@@ -197,4 +196,4 @@ class CriticPPO(nn.Module):
     def forward(self, observation: torch.Tensor):
         feature = self.feature_extractor(observation)
         value = self.value_head(feature)
-        return value
+        return value.squeeze(-1)
