@@ -23,7 +23,7 @@ class BasicConfig:
 
     # data
     batch_size: int = 511
-    horizon_len: int = 1000
+    horizon_len: int = 600
     buffer_size: int = 1_000_000
 
     # model

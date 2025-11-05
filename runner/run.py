@@ -2,6 +2,7 @@ import torch
 import tqdm
 import tyro
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
+from sympy.abc import lamda
 
 from modules.config import PPOConfig
 
@@ -101,7 +102,47 @@ def train_agent(cfg):
 
 if __name__ == '__main__':
 
-    train_agent(tyro.cli(PPOConfig))
+    cfg = tyro.cli(PPOConfig)
+
+    if cfg.vectorization_mode == 'async':
+        envs = AsyncVectorEnv([make_env(cfg) for _ in range(cfg.num_envs)])
+    elif cfg.vectorization_mode == 'sync':
+        envs = SyncVectorEnv([make_env(cfg) for _ in range(cfg.num_envs)])
+    else:
+        raise ValueError(f'Unsupported vectorization mode: {cfg.vectorization_mode}')
+
+    # Determine action space dimension based on whether it's discrete or continuous
+    if cfg.is_discrete:
+        action_dim = envs.single_action_space.n
+    else:
+        action_dim = envs.single_action_space.shape[0]
+
+    cfg.set_env_dim(envs.single_observation_space.shape[0], action_dim)
+
+    agent = build_agent(cfg)
+
+    observation, info = envs.reset()
+    if cfg.num_envs == 1:
+        assert observation.shape == (cfg.observation_dim,)
+        assert isinstance(observation, np.ndarray)
+        observation = torch.from_numpy(observation).to(cfg.device).unsqueeze(0)
+    else:
+        observation = torch.from_numpy(observation).to(cfg.device)
+    assert observation.shape == (cfg.num_envs, cfg.observation_dim)
+    assert isinstance(observation, torch.Tensor)
+
+    agent.last_observation = observation.detach()
+
+    pbar = tqdm.tqdm(range(cfg.max_train_steps))
+
+    for _ in pbar:
+        buffer = agent.explore(envs)
+
+        actor_loss, critic_loss = agent.update(buffer)
+
+        pbar.set_postfix(actor_loss=actor_loss, critic_loss=critic_loss)
+
+    envs.close()
 
 
 
