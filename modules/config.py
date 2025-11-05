@@ -14,7 +14,7 @@ class BasicConfig:
     num_envs: int = 3
     is_discrete: bool = True
     max_episode_steps: int = 300
-    vectorization_mode: str = 'async'
+    vectorization_mode: str = 'sync'
 
     # Train
     algorithm: str = field(init=False)
@@ -32,7 +32,12 @@ class BasicConfig:
     max_train_steps: int = 100
     max_grad_norm: float = 0.5
 
-    device: torch.device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # cuda > intel.xpu > cpu
+    device: torch.device =  torch.device(
+        'cuda' if torch.cuda.is_available() else (
+            'xpu' if torch.xpu.is_available() else
+            'cpu')
+    )
 
     # Log
     daytime: str = datetime.datetime.now().strftime('%Y%m%d')

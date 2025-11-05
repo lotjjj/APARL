@@ -1,5 +1,3 @@
-import numpy as np
-import gymnasium as gym
 import torch
 import tqdm
 import tyro
@@ -101,8 +99,9 @@ def train_agent(cfg):
     envs.close()
 
 
-config = tyro.cli(PPOConfig)
-train_agent(config)
+if __name__ == '__main__':
+
+    train_agent(tyro.cli(PPOConfig))
 
 
 
