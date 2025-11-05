@@ -1,9 +1,6 @@
 from typing import Tuple
-
-import numpy as np
 import torch
 from torch import nn
-from typing_extensions import override
 
 from agents.AgentBase import AgentAC
 
