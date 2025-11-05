@@ -158,7 +158,8 @@ class ActorPPO(nn.Module):
             logits = self.forward(observation)
             dist = self.distribution(logits=logits)
             action = dist.sample()
-            return action, dist.log_prob(action).sum(1)
+            log_prob = dist.log_prob(action)
+            return action, log_prob
         else:
             mu, std = self.forward(observation)
             dist = self.distribution(mu, std)
