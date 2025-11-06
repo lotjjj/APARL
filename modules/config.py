@@ -11,8 +11,8 @@ class BasicConfig:
     env_name: str = 'LunarLander-v3'
     observation_dim: int = field(init=False)
     action_dim: int = field(init=False)
-    num_envs: int = 4
     is_discrete: bool = True
+    num_envs: int = 4
     max_episode_steps: int = 300
     vectorization_mode: str = 'async'
 
@@ -20,6 +20,7 @@ class BasicConfig:
     algorithm: str = field(init=False)
     gamma: float = 0.99
     seed: int = 114514
+    num_epochs: int = 6
 
     # data
     batch_size: int = 511
@@ -29,37 +30,29 @@ class BasicConfig:
     # model
     policy: str = 'MlpPolicy'
     learning_rate: float = 3e-4
-    max_train_steps: int = 10_000
+    max_train_epochs: int = 100_000
     max_grad_norm: float = 0.5
 
     # cuda > intel.xpu > cpu
-    device: torch.device = field(init=False)
+    device: str = 'cpu'
 
     # Log
     daytime: str = datetime.datetime.now().strftime('%Y%m%d')
     root_dir: Path = field(init=False)
     log_dir: Path = field(init=False)
-    log_interval: int = 10
-    save_interval: int = 200
+    log_interval: int = 5
+    save_interval: int = 30
     save_dir: Path = field(init=False)
+    max_keep: int = 5
 
     # eval
     eval_num_episodes: int = 5
     eval_max_episode_steps: int = 500
-    eval_interval: int = 50
+    eval_interval: int = 10
     eval_render_mode: str = None
 
 
     def __post_init__(self):
-
-        # 仅可后初始化不会被覆盖的settings
-        if self.policy.lower() == 'mlppolicy':
-            self.device = torch.device('cpu')
-        else:
-            self.device = torch.device(
-            'cuda' if torch.cuda.is_available() else (
-                'xpu' if torch.xpu.is_available() else
-                'cpu'))
 
         # Initialize paths after all other fields are set
         self.root_dir = Path.cwd().parent / 'results' / f'{self.env_name}-{self.daytime}'
@@ -69,30 +62,33 @@ class BasicConfig:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
+        self.log_interval = self.num_epochs * self.log_interval
+        self.save_interval = self.num_epochs * self.save_interval
+        self.eval_interval = self.num_epochs * self.eval_interval
+
+        # Validation
+        assert self.num_envs * self.horizon_len >= self.batch_size * 2
+
     def set_env_dim(self, observation_dim, action_dim):
         self.observation_dim = observation_dim
         self.action_dim = action_dim
 
-    @property
-    def count_saved(self):
-        # assert len(list(self.save_dir.glob('*.pth'))) == len(list(self.log_dir.glob('*.log')))
-        return len(list(self.save_dir.glob('*.pth')))
+    def _print_device(self):
+        print(f'Using device: {self.device}')
 
-    @property
-    def log_path(self):
-        return self.log_dir / f"{self.algorithm}-#{self.count_saved}-{datetime.datetime.now().strftime('%H:%M')}.log"
+    def _print_dir(self):
+        print(f'Root dir: {self.root_dir}')
 
-    @property
-    def save_path(self):
-        return self.save_dir / f"{self.algorithm}-#{self.count_saved}-{datetime.datetime.now().strftime('%H:%M')}.pth"
-
+    def print_info(self):
+        self._print_device()
+        self._print_dir()
 
 @dataclass
 class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
 
     clip_ratio: float = 0.2
-    entropy_coef: float = 0.02
+    entropy_coef: float = 0.01
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
@@ -101,17 +97,15 @@ class PPOConfig(BasicConfig):
 
     actor_dims: List[int] = field(init=False)
     critic_dims: List[int] = field(init=False)
-    actor_lr: float = 4e-5
-    critic_lr: float = 4e-5
+    actor_lr: float = 1e-4
+    critic_lr: float = 3e-4
 
     def __post_init__(self):
-
-        self.distribution = torch.distributions.Normal if not self.is_discrete else torch.distributions.Categorical
         # Initialize lists after other fields are set
-        self.actor_dims = [128, 256, 128]
-        self.critic_dims = [128, 256, 128]
-
+        self.actor_dims = [128, 128, 128]
+        self.critic_dims = [128, 128, 128]
         super().__post_init__()
+
 
 @dataclass
 class DQNConfig(BasicConfig):

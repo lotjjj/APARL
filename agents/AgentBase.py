@@ -2,10 +2,12 @@ from abc import ABC, abstractmethod
 from typing import Tuple
 import torch
 from torch import nn
+import re
 
 class AgentBase(ABC):
     def __init__(self, config):
         self.config = config
+        self.epochs = 0
 
     @abstractmethod
     def update(self, buffer: Tuple[torch.Tensor, ...]):
@@ -23,12 +25,31 @@ class AgentBase(ABC):
     def explore(self, horizon_len: int):
         pass
 
-    @abstractmethod
-    def save_model(self):
-        pass
-    @abstractmethod
+    def save_model(self, epochs):
+        path = self.config.save_dir / f'{self.config.algorithm}_epochs_{epochs}.pth'
+
+        self.epochs = epochs
+
+        torch.save(self._check_point, path)
+        plist = list(path.parent.glob(f'{self.config.algorithm}_epochs_*.pth'))
+        if len(plist) > self.config.max_keep:
+            plist_sorted = sorted(plist, key=lambda x: int(re.search(r'epochs_(\d+).pth', x.name).group(1)))
+
+            for i in range(len(plist_sorted) - self.config.max_keep):
+                old_path = plist_sorted[i]
+                old_path.unlink()
+                print(f'\nRemove {old_path}')
+        print(f'\nSave model to {path}')
+
     def load_model(self, path):
-        pass
+        try:
+            check_point = torch.load(path)
+            self.epochs = check_point['epochs']
+
+            return check_point
+        except Exception as e:
+            print(f'No such model')
+
 
     @abstractmethod
     def eval(self):

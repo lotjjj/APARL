@@ -10,7 +10,7 @@ class AgentPPO(AgentAC):
         super().__init__(config)
         self.last_observation = None
 
-        self.actor = ActorPPO(self.config.observation_dim, self.config.action_dim, self.config.actor_dims, self.config.is_discrete, self.config.distribution).to(self.config.device)
+        self.actor = ActorPPO(self.config.observation_dim, self.config.action_dim, self.config.actor_dims, self.config.is_discrete).to(self.config.device)
         self.critic = CriticPPO(self.config.observation_dim, self.config.action_dim, self.config.critic_dims).to(self.config.device)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.actor_lr)
@@ -114,6 +114,7 @@ class AgentPPO(AgentAC):
             actor_losses[_] = actor_loss
             critic_losses[_] = critic_loss
             entropy_losses[_] = entropy_loss
+
         return actor_losses.mean().cpu().item(), entropy_losses.mean().cpu().item(),critic_losses.mean().cpu().item()
 
     @property
@@ -123,24 +124,19 @@ class AgentPPO(AgentAC):
             'critic': self.critic.state_dict(),
             'actor_optimizer': self.actor_optimizer.state_dict(),
             'critic_optimizer': self.critic_optimizer.state_dict(),
+            'epochs': self.epochs,
         }
         return check_point
 
-    def save_model(self):
-        torch.save(self._check_point, self.config.save_path)
-        print(f'Save model to {self.config.save_path}')
-
     def load_model(self, path = None):
-        if path is None:
-            path = self.config.save_path
         try:
-            check_point = torch.load(path)
+            check_point = super().load_model(path)
             self.actor.load_state_dict(check_point['actor'])
             self.critic.load_state_dict(check_point['critic'])
             self.actor_optimizer.load_state_dict(check_point['actor_optimizer'])
             self.critic_optimizer.load_state_dict(check_point['critic_optimizer'])
         except Exception as e:
-            print(f'No such model')
+            print(f'load model error: {e}')
 
     def eval(self):
         self.actor.eval()
@@ -150,12 +146,11 @@ from modules.Extractor import FlattenExtractor
 from modules.Head import ContinuousPolicyHead, DiscretePolicyHead
 
 class ActorPPO(nn.Module):
-    def __init__(self, observation_dim, action_dim, dims, is_discrete, distribution):
+    def __init__(self, observation_dim, action_dim, dims, is_discrete):
         super().__init__()
 
         dims = [ observation_dim, *dims]
 
-        self.distribution = distribution
         self.feature_extractor = FlattenExtractor(dims)
 
         self.is_discrete = is_discrete
@@ -184,24 +179,24 @@ class ActorPPO(nn.Module):
     def get_action(self, observation: torch.Tensor):
         if self.is_discrete:
             logits = self.forward(observation)
-            dist = self.distribution(logits=logits)
+            dist = torch.distributions.Categorical(logits=logits)
             action = dist.sample()
             log_prob = dist.log_prob(action)
             return action, log_prob
         else:
             mu, std = self.forward(observation)
-            dist = self.distribution(mu, std)
+            dist = torch.distributions.Normal(mu, std)
             action = dist.sample()
             return self.convert_actions(action), dist.log_prob(action)
 
     def get_logprob_entropy(self, observation: torch.Tensor, action: torch.Tensor):
         if self.is_discrete:
             logits = self.forward(observation)
-            dist = self.distribution(logits=logits)
+            dist = torch.distributions.Categorical(logits=logits)
             return dist.log_prob(action), dist.entropy()
         else:
             mu, std = self.forward(observation)
-            dist = self.distribution(mu, std)
+            dist = torch.distributions.Normal(mu, std)
             return dist.log_prob(action), dist.entropy()
 
     @staticmethod
