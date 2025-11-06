@@ -83,14 +83,15 @@ def train_agent(cfg):
 
         actor_loss, critic_loss, entropy_loss = agent.update(buffer)
 
-        # pbar.set_postfix(actor_loss=actor_loss, critic_loss=critic_loss, entropy_loss=entropy_loss)
+        pbar.set_postfix(actor_loss=actor_loss, critic_loss=critic_loss, entropy_loss=entropy_loss)
 
         if _ % cfg.save_interval == 0 and _ != 0:
             agent.save_model()
 
         if _ % cfg.eval_interval == 0:
             mean, std, seq, steps  = evaluate_agent(agent,cfg)
-            pbar.set_postfix(mean=mean, std=std, steps=steps.mean())
+            print(f'\nEvaluating agent at step {_}, eval episodes: {cfg.eval_num_episodes}, mean reward: {mean:.2f}, std: {std:.2f}, steps: {steps.mean()}')
+
     envs.close()
 
 

@@ -128,6 +128,7 @@ class AgentPPO(AgentAC):
 
     def save_model(self):
         torch.save(self._check_point, self.config.save_path)
+        print(f'Save model to {self.config.save_path}')
 
     def load_model(self, path = None):
         if path is None:

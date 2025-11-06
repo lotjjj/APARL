@@ -11,7 +11,7 @@ class BasicConfig:
     env_name: str = 'LunarLander-v3'
     observation_dim: int = field(init=False)
     action_dim: int = field(init=False)
-    num_envs: int = 3
+    num_envs: int = 4
     is_discrete: bool = True
     max_episode_steps: int = 300
     vectorization_mode: str = 'async'
@@ -44,9 +44,9 @@ class BasicConfig:
     save_dir: Path = field(init=False)
 
     # eval
-    eval_num_episodes: int = 10
+    eval_num_episodes: int = 5
     eval_max_episode_steps: int = 500
-    eval_interval: int = 200
+    eval_interval: int = 50
     eval_render_mode: str = None
 
 
@@ -92,17 +92,17 @@ class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
 
     clip_ratio: float = 0.2
-    entropy_coef: float = 0.1
+    entropy_coef: float = 0.02
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
-    num_epochs: int = 4
-    batch_size: int = 1023
+    num_epochs: int = 6
+    batch_size: int = 511
 
     actor_dims: List[int] = field(init=False)
     critic_dims: List[int] = field(init=False)
-    actor_lr: float = 2e-5
-    critic_lr: float = 2e-5
+    actor_lr: float = 4e-5
+    critic_lr: float = 4e-5
 
     def __post_init__(self):
 
