@@ -135,6 +135,7 @@ class AgentPPO(AgentAC):
             self.critic.load_state_dict(check_point['critic'])
             self.actor_optimizer.load_state_dict(check_point['actor_optimizer'])
             self.critic_optimizer.load_state_dict(check_point['critic_optimizer'])
+            print(f'load model from {path}')
         except Exception as e:
             print(f'load model error: {e}')
 

@@ -45,7 +45,6 @@ class AgentBase(ABC):
         try:
             check_point = torch.load(path)
             self.epochs = check_point['epochs']
-
             return check_point
         except Exception as e:
             print(f'No such model')

@@ -1,9 +1,11 @@
+from pathlib import Path
+
 import torch
 from tqdm import tqdm
 import tyro
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
-from modules.config import PPOConfig
+from modules.config import PPOConfig, save_config, load_config
 
 import gymnasium as gym
 import numpy as np
@@ -34,7 +36,7 @@ def make_vec_env(cfg, render_mode=None):
 
     # Determine action space dimension based on whether it's discrete or continuous
     if cfg.is_discrete:
-        action_dim = envs.single_action_space.n
+        action_dim = int(envs.single_action_space.n)
     else:
         action_dim = envs.single_action_space.shape[0]
 
@@ -61,15 +63,19 @@ def build_agent(cfg):
     print(f'config -> {cfg.algorithm} agent and {cfg.env_name} env have been successfully built')
     return agent
 
-def train_agent(cfg):
+def train_agent(cfg=PPOConfig(), model_path: Path =None):
     # env
     envs = make_vec_env(cfg)
 
     # agent
     agent = build_agent(cfg)
 
+    if model_path:
+        agent.load_model(model_path)
+
     # info
     cfg.print_info()
+    save_config(cfg)
 
     # train
     start_epoch = agent.epochs
@@ -90,7 +96,6 @@ def train_agent(cfg):
 
     agent.last_observation =  observation.detach()
 
-
     with tqdm(total=cfg.max_train_epochs, desc='Training') as pbar:
         pbar.update(start_epoch)
         while pbar.n < pbar.total:
@@ -101,10 +106,11 @@ def train_agent(cfg):
 
             pbar.set_postfix(actor_loss=actor_loss, critic_loss=critic_loss, entropy_loss=entropy_loss)
 
-            idx =(pbar.n-start_epoch) % cfg.save_interval
-            if idx == 0:
+            idx = pbar.n-start_epoch
+            if idx % (cfg.save_interval*cfg.num_epochs) == 0:
                 agent.save_model(pbar.n)
-            elif idx == 0:
+
+            if idx % (cfg.eval_interval*cfg.num_epochs) == 0:
                 mean, std, seq, steps  = evaluate_agent(agent,cfg)
                 print(f'\nEvaluate agent at epoch {pbar.n}, eval episodes: {cfg.eval_num_episodes}, mean reward: {mean:.2f}, std: {std:.2f}, steps: {steps.mean()}/{cfg.eval_max_episode_steps}')
 

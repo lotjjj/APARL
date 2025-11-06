@@ -1,112 +1,257 @@
+import dataclasses
 import datetime
+import importlib
+import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
-import torch
-import tyro
+from typing import List, Optional, Any, Dict, Union
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class BasicConfig:
-    # Env
+    # Environment
     env_name: str = 'LunarLander-v3'
-    observation_dim: int = field(init=False)
-    action_dim: int = field(init=False)
+    observation_dim: int = field(init=False, default=0)
+    action_dim: int = field(init=False, default=0)
     is_discrete: bool = True
     num_envs: int = 4
     max_episode_steps: int = 300
     vectorization_mode: str = 'async'
 
-    # Train
-    algorithm: str = field(init=False)
+    # Algorithm
+    algorithm: str = None
     gamma: float = 0.99
     seed: int = 114514
     num_epochs: int = 6
 
-    # data
+    # Data
     batch_size: int = 511
     horizon_len: int = 600
     buffer_size: int = 1_000_000
 
-    # model
+    # Model
     policy: str = 'MlpPolicy'
     learning_rate: float = 3e-4
     max_train_epochs: int = 100_000
     max_grad_norm: float = 0.5
 
-    # cuda > intel.xpu > cpu
+    # Device
     device: str = 'cpu'
 
-    # Log
-    daytime: str = datetime.datetime.now().strftime('%Y%m%d')
+    # Logging
+    daytime: str = field(default_factory=lambda: datetime.datetime.now().strftime('%Y%m%d'))
     root_dir: Path = field(init=False)
     log_dir: Path = field(init=False)
-    log_interval: int = 5
-    save_interval: int = 30
+    config_dir: Path = field(init=False)
+    log_interval: int = 10
+    save_interval: int = 60
     save_dir: Path = field(init=False)
     max_keep: int = 5
 
-    # eval
+    # Evaluation
     eval_num_episodes: int = 5
     eval_max_episode_steps: int = 500
-    eval_interval: int = 10
-    eval_render_mode: str = None
-
+    eval_interval: int = 30
+    eval_render_mode: Optional[str] = None
 
     def __post_init__(self):
+        self._setup_directories()
+        self.validate_config()
 
-        # Initialize paths after all other fields are set
+    def _setup_directories(self):
         self.root_dir = Path.cwd().parent / 'results' / f'{self.env_name}-{self.daytime}'
+        self.config_dir = self.root_dir / 'configs'
         self.log_dir = self.root_dir / 'logs'
-        self.save_dir = self.root_dir / 'saved_models'
-        # Create directories if they don't exist
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.save_dir = self.root_dir / 'models'
+        for d in [self.log_dir, self.save_dir]:
+            d.mkdir(parents=True, exist_ok=True)
 
-        self.log_interval = self.num_epochs * self.log_interval
-        self.save_interval = self.num_epochs * self.save_interval
-        self.eval_interval = self.num_epochs * self.eval_interval
+    def validate_config(self):
+        errors = []
+        if self.num_envs <= 0: errors.append("num_envs must be > 0")
+        if self.batch_size <= 0: errors.append("batch_size must be > 0")
+        if self.horizon_len <= 0: errors.append("horizon_len must be > 0")
+        if self.max_train_epochs <= 0: errors.append("max_train_epochs must be > 0")
+        if self.num_envs * self.horizon_len < self.batch_size * 2:
+            errors.append("num_envs * horizon_len should >= batch_size * 2")
 
-        # Validation
-        assert self.num_envs * self.horizon_len >= self.batch_size * 2
+        if errors:
+            raise ValueError("Config validation failed:\n" + "\n".join(errors))
 
-    def set_env_dim(self, observation_dim, action_dim):
+    def set_env_dim(self, observation_dim: int, action_dim: int):
         self.observation_dim = observation_dim
         self.action_dim = action_dim
 
-    def _print_device(self):
-        print(f'Using device: {self.device}')
-
-    def _print_dir(self):
-        print(f'Root dir: {self.root_dir}')
-
     def print_info(self):
-        self._print_device()
-        self._print_dir()
+        print(f"   - Algorithm: {self.algorithm}")
+        print(f"   - Env: {self.env_name}")
+        print(f"   - Device: {self.device}")
+        print(f"   - Logs: {self.log_dir}")
+        print(f"   - Models: {self.save_dir}")
+
 
 @dataclass
 class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
-
     clip_ratio: float = 0.2
     entropy_coef: float = 0.01
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
-    num_epochs: int = 6
+    num_epochs: int = 4
     batch_size: int = 511
 
-    actor_dims: List[int] = field(init=False)
-    critic_dims: List[int] = field(init=False)
-    actor_lr: float = 1e-4
+    actor_dims: List[int] = field(default_factory=lambda: [128, 128, 128])
+    critic_dims: List[int] = field(default_factory=lambda: [128, 128, 128])
+    actor_lr: float = 3e-4
     critic_lr: float = 3e-4
 
     def __post_init__(self):
-        # Initialize lists after other fields are set
-        self.actor_dims = [128, 128, 128]
-        self.critic_dims = [128, 128, 128]
         super().__post_init__()
 
 
 @dataclass
 class DQNConfig(BasicConfig):
-    pass
+    algorithm: str = 'DQN'
+    target_update_freq: int = 1000
+    epsilon_start: float = 1.0
+    epsilon_end: float = 0.01
+    epsilon_decay: float = 0.995
+
+    def __post_init__(self):
+        super().__post_init__()
+
+# Qwen3 Contributions
+
+def save_config(config: BasicConfig, path: Union[str, Path] = None) -> None:
+
+    if path:
+        path = Path(path)
+    else:
+        path = config.config_dir / f'{config.algorithm}_{config.daytime}.yaml'
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 准备可序列化的字典
+    data = {}
+    for field in dataclasses.fields(config):
+        value = getattr(config, field.name)
+
+        # 特殊处理Path对象
+        if isinstance(value, Path):
+            value = str(value)
+
+        # 递归处理嵌套配置对象（如果未来有）
+        elif hasattr(value, '__dataclass_fields__'):
+            value = {k: str(v) if isinstance(v, Path) else v
+                     for k, v in value.__dict__.items()}
+
+        data[field.name] = value
+
+    # 添加类标识信息用于类型还原
+    data['__config_class__'] = (
+        f"{config.__class__.__module__}.{config.__class__.__name__}"
+    )
+
+    # 保存到YAML
+    with path.open('w') as f:
+        yaml.dump(data, f, sort_keys=False, default_flow_style=False)
+    logger.info(f"Config saved to {path}")
+
+
+def load_config(path: Union[str, Path]) -> BasicConfig:
+    """
+    从YAML文件加载配置实例
+    自动还原原始配置类类型
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+
+    # 加载YAML数据
+    with path.open('r') as f:
+        data = yaml.safe_load(f)
+
+    if not data or '__config_class__' not in data:
+        raise ValueError("Invalid config file format - missing class identifier")
+
+    # 提取类信息并移除特殊键
+    class_path = data.pop('__config_class__')
+
+    # 动态导入配置类
+    try:
+        module_name, class_name = class_path.rsplit('.', 1)
+        module = importlib.import_module(module_name)
+        config_class = getattr(module, class_name)
+    except (ImportError, AttributeError) as e:
+        raise ImportError(f"Failed to load config class '{class_path}': {e}")
+
+    # 创建实例（绕过__init__，直接设置属性）
+    config = config_class.__new__(config_class)
+
+    # 设置所有属性（包括init=False的字段）
+    for key, value in data.items():
+        if key in config_class.__dataclass_fields__:
+            field_type = config_class.__dataclass_fields__[key].type
+
+            # 特殊处理Path字段
+            if field_type is Path and isinstance(value, str):
+                value = Path(value)
+
+            # 处理嵌套配置（如果未来有）
+            elif isinstance(value, dict) and hasattr(config_class, key):
+                nested_config = getattr(config, key)
+                if hasattr(nested_config, '__dataclass_fields__'):
+                    for nk, nv in value.items():
+                        if nk in nested_config.__dataclass_fields__:
+                            if nested_config.__dataclass_fields__[nk].type is Path and isinstance(nv, str):
+                                nv = Path(nv)
+                            setattr(nested_config, nk, nv)
+                    continue
+
+            setattr(config, key, value)
+
+    # 确保__post_init__被调用
+    if hasattr(config, '__post_init__'):
+        config.__post_init__()
+
+    logger.info(f"Config loaded from {path} as {config_class.__name__}")
+    return config
+
+
+def wrap_config_from_dict(config: BasicConfig, update_dict: Dict[str, Any]) -> None:
+    """
+    根据字典更新配置实例
+    只更新配置类中存在的字段，自动处理Path类型转换
+    """
+    for key, value in update_dict.items():
+        if not hasattr(config, key):
+            logger.warning(f"Skipping unknown config field: {key}")
+            continue
+
+        # 获取字段类型
+        field_type = type(getattr(config, key))
+
+        # 自动转换Path类型
+        if field_type is Path and isinstance(value, str):
+            value = Path(value)
+        elif field_type is str and isinstance(value, Path):
+            value = str(value)
+
+        # 递归处理嵌套配置（如果未来有）
+        if hasattr(value, 'items') and hasattr(config, key):
+            nested_config = getattr(config, key)
+            if hasattr(nested_config, '__dataclass_fields__'):
+                wrap_config_from_dict(nested_config, value)
+                continue
+
+        setattr(config, key, value)
+
+    # 重新验证配置
+    if hasattr(config, 'validate_config'):
+        config.validate_config()
+
+    logger.info("Config updated from dictionary")
