@@ -1,4 +1,6 @@
+.gitignore
 results/
 tests/
 .idea/
 .vscode/
+modules/experiments/
