@@ -30,6 +30,10 @@ class AgentBase(ABC):
     def load_model(self, path):
         pass
 
+    @abstractmethod
+    def eval(self):
+        pass
+
     @property
     def _check_point(self):
         return {}

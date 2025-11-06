@@ -14,7 +14,7 @@ class BasicConfig:
     num_envs: int = 3
     is_discrete: bool = True
     max_episode_steps: int = 300
-    vectorization_mode: str = 'sync'
+    vectorization_mode: str = 'async'
 
     # Train
     algorithm: str = field(init=False)
@@ -29,31 +29,40 @@ class BasicConfig:
     # model
     policy: str = 'MlpPolicy'
     learning_rate: float = 3e-4
-    max_train_steps: int = 100_000
+    max_train_steps: int = 10_000
     max_grad_norm: float = 0.5
 
     # cuda > intel.xpu > cpu
-    device: torch.device =  torch.device(
-        'cuda' if torch.cuda.is_available() else (
-            'xpu' if torch.xpu.is_available() else
-            'cpu')
-    )
+    device: torch.device = field(init=False)
 
     # Log
     daytime: str = datetime.datetime.now().strftime('%Y%m%d')
     root_dir: Path = field(init=False)
     log_dir: Path = field(init=False)
-    log_interval: int = 100
-    save_interval: int = 1000
+    log_interval: int = 10
+    save_interval: int = 200
     save_dir: Path = field(init=False)
+
+    # eval
+    eval_num_episodes: int = 10
+    eval_max_episode_steps: int = 500
+    eval_interval: int = 200
+    eval_render_mode: str = None
 
 
     def __post_init__(self):
 
         # 仅可后初始化不会被覆盖的settings
+        if self.policy.lower() == 'mlppolicy':
+            self.device = torch.device('cpu')
+        else:
+            self.device = torch.device(
+            'cuda' if torch.cuda.is_available() else (
+                'xpu' if torch.xpu.is_available() else
+                'cpu'))
 
         # Initialize paths after all other fields are set
-        self.root_dir = Path.cwd().parent.parent / 'results' / f'{self.env_name}-{self.daytime}'
+        self.root_dir = Path.cwd().parent / 'results' / f'{self.env_name}-{self.daytime}'
         self.log_dir = self.root_dir / 'logs'
         self.save_dir = self.root_dir / 'saved_models'
         # Create directories if they don't exist
@@ -66,7 +75,7 @@ class BasicConfig:
 
     @property
     def count_saved(self):
-        assert len(list(self.save_dir.glob('*.pth'))) == len(list(self.log_dir.glob('*.log')))
+        # assert len(list(self.save_dir.glob('*.pth'))) == len(list(self.log_dir.glob('*.log')))
         return len(list(self.save_dir.glob('*.pth')))
 
     @property
@@ -83,36 +92,27 @@ class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
 
     clip_ratio: float = 0.2
-    entropy_coef: float = 0.01
+    entropy_coef: float = 0.1
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
-    num_epochs: int = 6
-    batch_size: int = 511
+    num_epochs: int = 4
+    batch_size: int = 1023
 
     actor_dims: List[int] = field(init=False)
     critic_dims: List[int] = field(init=False)
-    actor_lr: float = 3e-4
-    critic_lr: float = 3e-4
-
+    actor_lr: float = 2e-5
+    critic_lr: float = 2e-5
 
     def __post_init__(self):
 
         self.distribution = torch.distributions.Normal if not self.is_discrete else torch.distributions.Categorical
         # Initialize lists after other fields are set
-        self.actor_dims = [256, 256, 256]
-        self.critic_dims = [256, 256, 256]
+        self.actor_dims = [128, 256, 128]
+        self.critic_dims = [128, 256, 128]
 
         super().__post_init__()
 
 @dataclass
 class DQNConfig(BasicConfig):
     pass
-
-
-# test
-if __name__ == '__main__':
-    config = tyro.cli(PPOConfig)
-    print(config.log_path)
-    print(config.save_path)
-    print(config.count_saved)

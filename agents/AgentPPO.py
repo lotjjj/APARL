@@ -1,9 +1,6 @@
 from typing import Tuple
-
-import numpy as np
 import torch
 from torch import nn
-from typing_extensions import override
 
 from agents.AgentBase import AgentAC
 
@@ -85,6 +82,7 @@ class AgentPPO(AgentAC):
 
         critic_losses = torch.zeros(self.config.num_epochs)
         actor_losses = torch.zeros(self.config.num_epochs)
+        entropy_losses = torch.zeros(self.config.num_epochs)
 
         for _ in range(self.config.num_epochs):
             ids0, ids1 = self.sample_idx()
@@ -105,16 +103,18 @@ class AgentPPO(AgentAC):
             surr1 = ratio * advantages_batch
             surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
             actor_loss = -torch.min(surr1, surr2).mean()
-            actor_loss = actor_loss - self.config.entropy_coef * entropy_batch.mean()
+            entropy_loss = -self.config.entropy_coef * entropy_batch.mean()
+            actor_entropy_loss = actor_loss + entropy_loss
 
             # critic loss
             critic_loss = nn.MSELoss()(values_batch, reward_sums_batch)
 
-            self.optimizer_backward(self.actor_optimizer,  actor_loss)
+            self.optimizer_backward(self.actor_optimizer,  actor_entropy_loss)
             self.optimizer_backward(self.critic_optimizer, critic_loss)
-            actor_losses[_] = actor_loss.item()
-            critic_losses[_] = critic_loss.item()
-        return actor_losses.mean().cpu().item(), critic_losses.mean().cpu().item()
+            actor_losses[_] = actor_loss
+            critic_losses[_] = critic_loss
+            entropy_losses[_] = entropy_loss
+        return actor_losses.mean().cpu().item(), entropy_losses.mean().cpu().item(),critic_losses.mean().cpu().item()
 
     @property
     def _check_point(self):
@@ -141,9 +141,12 @@ class AgentPPO(AgentAC):
         except Exception as e:
             print(f'No such model')
 
+    def eval(self):
+        self.actor.eval()
+        self.critic.eval()
+
 from modules.Extractor import FlattenExtractor
 from modules.Head import ContinuousPolicyHead, DiscretePolicyHead
-
 
 class ActorPPO(nn.Module):
     def __init__(self, observation_dim, action_dim, dims, is_discrete, distribution):
