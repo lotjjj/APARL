@@ -104,8 +104,8 @@ class PPOConfig(BasicConfig):
     num_epochs: int = 4
     batch_size: int = 511
 
-    actor_dims: List[int] = field(default_factory=lambda: [128, 128, 128])
-    critic_dims: List[int] = field(default_factory=lambda: [128, 128, 128])
+    actor_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
+    critic_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
     actor_lr: float = 3e-4
     critic_lr: float = 3e-4
 
