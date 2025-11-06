@@ -2,10 +2,9 @@ from pathlib import Path
 
 import torch
 from tqdm import tqdm
-import tyro
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
-from modules.config import PPOConfig, save_config, load_config
+from modules.config import PPOConfig, save_config
 
 import gymnasium as gym
 import numpy as np

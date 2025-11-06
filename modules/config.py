@@ -16,7 +16,7 @@ class BasicConfig:
     env_name: str = 'LunarLander-v3'
     observation_dim: int = field(init=False, default=0)
     action_dim: int = field(init=False, default=0)
-    is_discrete: bool = True
+    is_discrete: bool = False
     num_envs: int = 4
     max_episode_steps: int = 300
     vectorization_mode: str = 'async'
