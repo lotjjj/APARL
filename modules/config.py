@@ -16,20 +16,19 @@ class BasicConfig:
     env_name: str = 'LunarLander-v3'
     observation_dim: int = field(init=False, default=0)
     action_dim: int = field(init=False, default=0)
-    is_discrete: bool = False
-    num_envs: int = 4
-    max_episode_steps: int = 300
+    is_discrete: bool = True
+    num_envs: int = 6
     vectorization_mode: str = 'async'
 
     # Algorithm
     algorithm: str = None
     gamma: float = 0.99
     seed: int = 114514
-    num_epochs: int = 6
+    num_epochs: int = 3
 
     # Data
-    batch_size: int = 511
-    horizon_len: int = 600
+    batch_size: int = 64
+    horizon_len: int = 300
     buffer_size: int = 1_000_000
 
     # Model
@@ -101,13 +100,13 @@ class PPOConfig(BasicConfig):
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
-    num_epochs: int = 4
-    batch_size: int = 511
+    num_epochs: int = 3
+    batch_size: int = 64
 
     actor_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
     critic_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
     actor_lr: float = 3e-4
-    critic_lr: float = 3e-4
+    critic_lr: float = 1e-3
 
     def __post_init__(self):
         super().__post_init__()
@@ -221,7 +220,7 @@ def load_config(path: Union[str, Path]) -> BasicConfig:
     return config
 
 
-def wrap_config_from_dict(config: BasicConfig, update_dict: Dict[str, Any]) -> None:
+def wrap_config_from_dict(config: BasicConfig, update_dict: Dict[str, Any]) -> Any:
     """
     根据字典更新配置实例
     只更新配置类中存在的字段，自动处理Path类型转换
@@ -254,3 +253,4 @@ def wrap_config_from_dict(config: BasicConfig, update_dict: Dict[str, Any]) -> N
         config.validate_config()
 
     logger.info("Config updated from dictionary")
+    return config

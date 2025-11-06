@@ -29,8 +29,6 @@ class AgentBase(ABC):
         path = self.config.save_dir / f'{self.config.algorithm}_epochs_{epochs}.pth'
 
         self.epochs = epochs
-
-        torch.save(self._check_point, path)
         plist = list(path.parent.glob(f'{self.config.algorithm}_epochs_*.pth'))
         if len(plist) > self.config.max_keep:
             plist_sorted = sorted(plist, key=lambda x: int(re.search(r'epochs_(\d+).pth', x.name).group(1)))
@@ -39,6 +37,7 @@ class AgentBase(ABC):
                 old_path = plist_sorted[i]
                 old_path.unlink()
                 print(f'\nRemove {old_path}')
+        torch.save(self._check_point, path)
         print(f'\nSave model to {path}')
 
     def load_model(self, path):

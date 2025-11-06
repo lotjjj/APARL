@@ -12,7 +12,7 @@ import numpy as np
 
 def make_env(cfg, render_mode: str = None):
     def _init():
-        single_env = gym.make(cfg.env_name, max_episode_steps=cfg.max_episode_steps, render_mode= render_mode)
+        single_env = gym.make(cfg.env_name, render_mode= render_mode)
 
         assert cfg.is_discrete == isinstance(single_env.action_space, gym.spaces.Discrete)
 
