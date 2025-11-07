@@ -5,36 +5,33 @@ from tqdm import tqdm
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
 from modules.ReplayBuffer import ReplayBuffer
-from modules.config import PPOConfig, save_config
+from modules.config import PPOConfig, save_config, mkdir_from_cfg
 
 import gymnasium as gym
 import numpy as np
+import functools
 
 
-def make_env(cfg, render_mode: str = None):
+def make_env(cfg, render_mode: str = None, wrappers=None):
     def _init():
-        single_env = gym.make(cfg.env_name, render_mode= render_mode)
+        env = gym.make(cfg.env_name, render_mode=render_mode)
+        assert cfg.is_discrete == isinstance(env.action_space, gym.spaces.Discrete)
 
-        assert cfg.is_discrete == isinstance(single_env.action_space, gym.spaces.Discrete)
-        single_env = gym.wrappers.FlattenObservation(single_env)
-        return single_env
+        # Default FlattenObservation
+        all_wrappers = [gym.wrappers.FlattenObservation] + (wrappers if wrappers else [])
+        return functools.reduce(lambda e, w: w(e), all_wrappers, env)
     return _init
 
 
-def make_vec_env(cfg, render_mode=None):
+def make_vec_env(cfg, render_mode=None, wrappers=None):
     if cfg.vectorization_mode == 'async':
-        envs = AsyncVectorEnv([make_env(cfg, render_mode=render_mode) for _ in range(cfg.num_envs)])
+        envs = AsyncVectorEnv([make_env(cfg, render_mode, wrappers) for _ in range(cfg.num_envs)])
     elif cfg.vectorization_mode == 'sync':
-        envs = SyncVectorEnv([make_env(cfg, render_mode=render_mode) for _ in range(cfg.num_envs)])
+        envs = SyncVectorEnv([make_env(cfg, render_mode, wrappers) for _ in range(cfg.num_envs)])
     else:
         raise ValueError(f'Unsupported vectorization mode: {cfg.vectorization_mode}')
 
-    # Determine action space dimension based on whether it's discrete or continuous
-    if cfg.is_discrete:
-        action_dim = int(envs.single_action_space.n)
-    else:
-        action_dim = envs.single_action_space.shape[0]
-
+    action_dim = envs.single_action_space.n if cfg.is_discrete else envs.single_action_space.shape[0]
     cfg.set_env_dim(envs.single_observation_space.shape[0], action_dim)
     return envs
 
@@ -56,10 +53,7 @@ def build_agent(cfg):
         print(f'Error: {e}')
     return agent
 
-def train_agent(cfg=PPOConfig(), model_path: Path =None):
-    # env
-    envs = make_vec_env(cfg)
-
+def train_agent(envs, cfg, model_path: Path =None):
     # agent
     agent = build_agent(cfg)
 
@@ -68,6 +62,7 @@ def train_agent(cfg=PPOConfig(), model_path: Path =None):
 
     # info
     cfg.print_info()
+    mkdir_from_cfg(cfg)
     save_config(cfg)
 
     # train

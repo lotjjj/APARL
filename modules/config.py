@@ -65,8 +65,6 @@ class BasicConfig:
         self.config_dir = self.root_dir / 'configs'
         self.log_dir = self.root_dir / 'logs'
         self.save_dir = self.root_dir / 'models'
-        for d in [self.log_dir, self.save_dir]:
-            d.mkdir(parents=True, exist_ok=True)
 
     def validate_config(self):
         errors = []
@@ -97,7 +95,7 @@ class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
     is_on_policy: bool = True
     clip_ratio: float = 0.2
-    entropy_coef: float = 0.01
+    entropy_coef: float = 0.1
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
     num_epochs: int = 3
@@ -105,8 +103,8 @@ class PPOConfig(BasicConfig):
 
     actor_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
     critic_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
-    actor_lr: float = 3e-4
-    critic_lr: float = 1e-3
+    actor_lr: float = 2e-5
+    critic_lr: float = 3e-4
 
     def __post_init__(self):
         super().__post_init__()
@@ -131,7 +129,6 @@ def save_config(config: BasicConfig, path: Union[str, Path] = None) -> None:
         path = Path(path)
     else:
         path = config.config_dir / f'{config.algorithm}_{config.daytime}.yaml'
-    path.parent.mkdir(parents=True, exist_ok=True)
 
     # 准备可序列化的字典
     data = {}
@@ -219,12 +216,16 @@ def load_config(path: Union[str, Path]) -> BasicConfig:
     logger.info(f"Config loaded from {path} as {config_class.__name__}")
     return config
 
+def mkdir_from_cfg(cfg: BasicConfig):
+    for d in [cfg.log_dir, cfg.save_dir, cfg.config_dir]:
+        d.mkdir(parents=True, exist_ok=True)
 
 def wrap_config_from_dict(config: BasicConfig, update_dict: Dict[str, Any]) -> Any:
     """
     根据字典更新配置实例
     只更新配置类中存在的字段，自动处理Path类型转换
     """
+
     for key, value in update_dict.items():
         if not hasattr(config, key):
             logger.warning(f"Skipping unknown config field: {key}")

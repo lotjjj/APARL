@@ -9,12 +9,16 @@ LunarLander_v3_dict = {
     'max_episode_steps': 300
 }
 
-MountainCar_v0_dict = {
+MountainCarContinuous_v0_dict = {
     'env_name': 'MountainCarContinuous-v0',
     'is_discrete': False,
 
-    'num_envs': 12,
-    'batch_size': 1023,
+    'device': 'cpu',
+
+    'num_envs': 6,
+    'batch_size': 128,
+
+    'eval_render_mode': 'None',
 }
 
 BipedalWalker_v3_dict = {
