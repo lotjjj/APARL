@@ -11,7 +11,10 @@ LunarLander_v3_dict = {
 
 MountainCar_v0_dict = {
     'env_name': 'MountainCarContinuous-v0',
-    'is_discrete': False
+    'is_discrete': False,
+
+    'num_envs': 12,
+    'batch_size': 1023,
 }
 
 BipedalWalker_v3_dict = {

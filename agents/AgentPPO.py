@@ -22,8 +22,6 @@ class AgentPPO(AgentAC):
         return actions, log_probs
 
     def explore(self, env):
-        # return observations, actions, log_probs, rewards, undone, unmasks
-        # Pre-authorize memory
 
         observations, actions, log_probs, rewards, terminations, truncations = self.build_temp_buffer()
 
@@ -56,7 +54,8 @@ class AgentPPO(AgentAC):
         truncations = torch.logical_not(unmasks)
         # add V to the last state as compensation
         if torch.any(truncations):
-            rewards[truncations] += self.critic(observations[truncations])
+            # No compensation
+            # rewards[truncations] += self.critic(observations[truncations])
             undone[truncations] = False
         masks = undone * self.config.gamma
         values = self.critic(observations)
@@ -105,7 +104,7 @@ class AgentPPO(AgentAC):
             surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
             actor_loss = -torch.min(surr1, surr2).mean()
             entropy_loss = -self.config.entropy_coef * entropy_batch.mean()
-            actor_entropy_loss = actor_loss # + entropy_loss
+            actor_entropy_loss = actor_loss + entropy_loss
 
             # critic loss
             critic_loss = nn.MSELoss()(values_batch, reward_sums_batch)
@@ -161,15 +160,8 @@ class ActorPPO(nn.Module):
         else:
             self.policy_head = ContinuousPolicyHead([dims[-1], action_dim])
 
-        # self.observation_avg = nn.Parameter(torch.zeros(observation_dim,), requires_grad=False)
-        # self.observation_std = nn.Parameter(torch.ones(observation_dim,), requires_grad=False)
-
-
-    # def observation_norm(self, observation: torch.Tensor):
-    #     return (observation - self.observation_avg) / (self.observation_std + 1e-6)
 
     def forward(self, observation: torch.Tensor):
-        # observation = self.observation_norm(observation)
         feature = self.feature_extractor(observation)
         if self.is_discrete:
             logits = self.policy_head(feature)
