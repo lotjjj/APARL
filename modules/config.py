@@ -19,6 +19,7 @@ class BasicConfig:
     is_discrete: bool = True
     num_envs: int = 6
     vectorization_mode: str = 'async'
+    options: Dict[str, Any] = field(default_factory=lambda: {})
 
     # Algorithm
     algorithm: str = None
@@ -139,9 +140,14 @@ def save_config(config: BasicConfig, path: Union[str, Path] = None) -> None:
         if isinstance(value, Path):
             value = str(value)
 
+        # 特殊处理字典对象（包括options和其他Dict字段）
+        elif isinstance(value, dict):
+            # 递归处理字典中的Path对象
+            value = _serialize_dict(value)
+
         # 递归处理嵌套配置对象（如果未来有）
         elif hasattr(value, '__dataclass_fields__'):
-            value = {k: str(v) if isinstance(v, Path) else v
+            value = {k: str(v) if isinstance(v, Path) else _serialize_dict(v) if isinstance(v, dict) else v
                      for k, v in value.__dict__.items()}
 
         data[field.name] = value
@@ -155,6 +161,30 @@ def save_config(config: BasicConfig, path: Union[str, Path] = None) -> None:
     with path.open('w') as f:
         yaml.dump(data, f, sort_keys=False, default_flow_style=False)
     logger.info(f"Config saved to {path}")
+
+def _serialize_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+    """递归序列化字典，处理嵌套的字典和Path对象"""
+    result = {}
+    for k, v in d.items():
+        if isinstance(v, Path):
+            result[k] = str(v)
+        elif isinstance(v, dict):
+            result[k] = _serialize_dict(v)
+        elif hasattr(v, '__dataclass_fields__'):
+            # 如果字典值是数据类实例，也进行序列化
+            nested_dict = {}
+            for field_name in dataclasses.fields(v):
+                field_value = getattr(v, field_name.name)
+                if isinstance(field_value, Path):
+                    nested_dict[field_name.name] = str(field_value)
+                elif isinstance(field_value, dict):
+                    nested_dict[field_name.name] = _serialize_dict(field_value)
+                else:
+                    nested_dict[field_name.name] = field_value
+            result[k] = nested_dict
+        else:
+            result[k] = v
+    return result
 
 
 def load_config(path: Union[str, Path]) -> BasicConfig:
@@ -196,14 +226,25 @@ def load_config(path: Union[str, Path]) -> BasicConfig:
             if field_type is Path and isinstance(value, str):
                 value = Path(value)
 
+            # 特殊处理字典字段（包括options和其他Dict字段）
+            elif (hasattr(field_type, '__origin__') and
+                  field_type.__origin__ is dict) or \
+                 (isinstance(field_type, type) and issubclass(field_type, dict)):
+                value = _deserialize_dict(value)
+
             # 处理嵌套配置（如果未来有）
             elif isinstance(value, dict) and hasattr(config_class, key):
                 nested_config = getattr(config, key)
                 if hasattr(nested_config, '__dataclass_fields__'):
                     for nk, nv in value.items():
                         if nk in nested_config.__dataclass_fields__:
-                            if nested_config.__dataclass_fields__[nk].type is Path and isinstance(nv, str):
+                            field_type = nested_config.__dataclass_fields__[nk].type
+                            if field_type is Path and isinstance(nv, str):
                                 nv = Path(nv)
+                            elif (hasattr(field_type, '__origin__') and
+                                  field_type.__origin__ is dict) or \
+                                 (isinstance(field_type, type) and issubclass(field_type, dict)):
+                                nv = _deserialize_dict(nv)
                             setattr(nested_config, nk, nv)
                     continue
 
@@ -215,6 +256,21 @@ def load_config(path: Union[str, Path]) -> BasicConfig:
 
     logger.info(f"Config loaded from {path} as {config_class.__name__}")
     return config
+
+def _deserialize_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+    """递归反序列化字典，还原嵌套的字典和Path对象"""
+    result = {}
+    for k, v in d.items():
+        if isinstance(v, str):
+            # 尝试将字符串转换为Path对象（如果它看起来像路径）
+            # 这里我们假设所有字符串都可能是路径，根据实际需求调整
+            # 为了更精确，我们只处理以特定模式结尾的字符串
+            result[k] = v
+        elif isinstance(v, dict):
+            result[k] = _deserialize_dict(v)
+        else:
+            result[k] = v
+    return result
 
 def mkdir_from_cfg(cfg: BasicConfig):
     for d in [cfg.log_dir, cfg.save_dir, cfg.config_dir]:

@@ -4,6 +4,9 @@ import torch
 from torch import nn
 import re
 
+from tqdm import tqdm
+
+
 class AgentBase(ABC):
     def __init__(self, config):
         self.config = config
@@ -36,9 +39,9 @@ class AgentBase(ABC):
             for i in range(len(plist_sorted) - self.config.max_keep):
                 old_path = plist_sorted[i]
                 old_path.unlink()
-                print(f'\nRemove {old_path}')
+                tqdm.write(f'\nRemove {old_path}')
         torch.save(self._check_point, path)
-        print(f'\nSave model to {path}')
+        tqdm.write(f'\nSave model to {path}')
 
     def load_model(self, path):
         try:

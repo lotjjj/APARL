@@ -1,11 +1,12 @@
 from pathlib import Path
+from typing import Dict
 
 import torch
 from tqdm import tqdm
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
 from modules.ReplayBuffer import ReplayBuffer
-from modules.config import PPOConfig, save_config, mkdir_from_cfg
+from modules.config import save_config, mkdir_from_cfg
 
 import gymnasium as gym
 import numpy as np
@@ -16,9 +17,7 @@ def make_env(cfg, render_mode: str = None, wrappers=None):
     def _init():
         env = gym.make(cfg.env_name, render_mode=render_mode)
         assert cfg.is_discrete == isinstance(env.action_space, gym.spaces.Discrete)
-
-        # Default FlattenObservation
-        all_wrappers = [gym.wrappers.FlattenObservation] + (wrappers if wrappers else [])
+        all_wrappers = wrappers if wrappers else []
         return functools.reduce(lambda e, w: w(e), all_wrappers, env)
     return _init
 
@@ -74,7 +73,8 @@ def train_agent(envs, cfg, model_path: Path =None):
     # init
     buffer = () if cfg.is_on_policy else ReplayBuffer(cfg)
 
-    observation, info = envs.reset()
+    observation, info = envs.reset(options=cfg.options)
+
     if cfg.num_envs == 1:
         assert observation.shape == (cfg.observation_dim,)
         assert isinstance(observation, np.ndarray)
@@ -86,7 +86,7 @@ def train_agent(envs, cfg, model_path: Path =None):
 
     agent.last_observation =  observation.detach()
 
-    with tqdm(total=cfg.max_train_epochs, desc='Training') as pbar:
+    with tqdm(total=cfg.max_train_epochs, desc='Training ') as pbar:
         pbar.update(start_epoch)
         while pbar.n < pbar.total:
 
@@ -101,17 +101,20 @@ def train_agent(envs, cfg, model_path: Path =None):
             pbar.update(cfg.num_epochs)
 
             idx = pbar.n-start_epoch
-            if idx % (cfg.save_interval*cfg.num_epochs) == 0:
-                agent.save_model(pbar.n)
 
             if idx % (cfg.eval_interval*cfg.num_epochs) == 0:
                 mean, std, seq, steps  = evaluate_agent(agent,cfg)
-                print(f'\nEvaluate agent at epoch {pbar.n}, eval episodes: {cfg.eval_num_episodes}, mean reward: {mean:.2f}, std: {std:.2f}, steps: {steps.mean()}/{cfg.eval_max_episode_steps}')
+                tqdm.write(f'\nEvaluate agent at epoch {pbar.n}, eval episodes: {cfg.eval_num_episodes}, '
+                           f'mean reward: {mean:.4f}, std: {std:.4f}, max_reward: {seq.max():.4f}, min_reward: {seq.min():.4f}, '
+                           f'steps: {steps.mean()}/{cfg.eval_max_episode_steps}')
+
+            if idx % (cfg.save_interval*cfg.num_epochs) == 0:
+                agent.save_model(pbar.n)
 
     envs.close()
     agent.save_model(pbar.n)
     pbar.close()
-    print('Training finished')
+    tqdm.write('Training finished')
 
 def evaluate_agent(agent, cfg):
     env = make_env(cfg, render_mode=cfg.eval_render_mode)()

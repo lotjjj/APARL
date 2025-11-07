@@ -19,6 +19,8 @@ MountainCarContinuous_v0_dict = {
     'batch_size': 128,
 
     'eval_render_mode': 'None',
+
+    'options': {"low": -1, "high": -0.5},
 }
 
 BipedalWalker_v3_dict = {

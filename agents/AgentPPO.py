@@ -1,6 +1,5 @@
 from typing import Tuple
 import torch
-from mpmath import convert
 from torch import nn
 
 from agents.AgentBase import AgentAC
@@ -167,7 +166,8 @@ class ActorPPO(nn.Module):
             logits = self.policy_head(feature)
             return logits
         else:
-            mu, std = self.policy_head(feature)
+            mu, log_std = self.policy_head(feature)
+            std = torch.exp(torch.clamp(log_std, min=-20, max=1))
             return self.convert_action(mu), std
 
     def get_action(self, observation: torch.Tensor):

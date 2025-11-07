@@ -11,7 +11,7 @@ if __name__ == '__main__':
     cfg = wrap_config_from_dict(PPOConfig(), env_dicts.MountainCarContinuous_v0_dict)
 
     # make env
-    envs = make_vec_env(cfg, wrappers=[gym.wrappers.NormalizeObservation])
+    envs = make_vec_env(cfg, wrappers=[])
 
     # train a new agent under above configurations
     train_agent(envs, cfg)

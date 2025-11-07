@@ -11,8 +11,8 @@ class ContinuousPolicyHead(nn.Module):
 
     def forward(self, x):
         mu = self.net(x)
-        std = torch.exp(self.log_std(x))
-        return mu, std
+        log_std = self.log_std(x)
+        return mu, log_std
 
 class DiscretePolicyHead(nn.Module):
     def __init__(self, dims, activation=nn.ReLU):
