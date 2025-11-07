@@ -25,7 +25,7 @@ class BasicConfig:
     algorithm: str = None
     gamma: float = 0.99
     seed: int = 114514
-    num_epochs: int = 3
+    num_epochs: int = 4
 
     # Data
     batch_size: int = 64
@@ -47,14 +47,14 @@ class BasicConfig:
     log_dir: Path = field(init=False)
     config_dir: Path = field(init=False)
     log_interval: int = 10
-    save_interval: int = 600
+    save_interval: int = 1200
     save_dir: Path = field(init=False)
     max_keep: int = 5
 
     # Evaluation
     eval_num_episodes: int = 10
     eval_max_episode_steps: int = 1000
-    eval_interval: int = 200
+    eval_interval: int = 600
     eval_render_mode: Optional[str] = None
 
     def __post_init__(self):
@@ -99,11 +99,11 @@ class PPOConfig(BasicConfig):
     entropy_coef: float = 0.1
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
-    num_epochs: int = 3
+    num_epochs: int = 4
     batch_size: int = 511
 
-    actor_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
-    critic_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
+    actor_dims: List[int] = field(default_factory=lambda: [256, 256])
+    critic_dims: List[int] = field(default_factory=lambda: [256, 256])
     actor_lr: float = 2e-5
     critic_lr: float = 3e-4
 

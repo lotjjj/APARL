@@ -8,7 +8,7 @@ warnings.filterwarnings("ignore")
 
 if __name__ == '__main__':
     # safe wrapping
-    cfg = wrap_config_from_dict(PPOConfig(), env_dicts.MountainCarContinuous_v0_dict)
+    cfg = wrap_config_from_dict(PPOConfig(), env_dicts.LunarLander_v3_dict)
 
     # make env
     envs = make_vec_env(cfg, wrappers=[])

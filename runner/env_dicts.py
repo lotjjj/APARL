@@ -6,7 +6,10 @@ LunarLander_v3_dict = {
     'env_name': 'LunarLander-v3',
     'is_discrete': True,
 
-    'max_episode_steps': 300
+    'max_episode_steps': 300,
+    'eval_max_episode_steps': 300,
+    'eval_num_episodes': 3,
+    'eval_render_mode': 'human',
 }
 
 MountainCarContinuous_v0_dict = {
