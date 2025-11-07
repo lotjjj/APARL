@@ -10,7 +10,7 @@ class AgentBase(ABC):
         self.epochs = 0
 
     @abstractmethod
-    def update(self, buffer: Tuple[torch.Tensor, ...]):
+    def update(self, buffer):
         pass
 
     @abstractmethod
@@ -22,7 +22,7 @@ class AgentBase(ABC):
         pass
 
     @abstractmethod
-    def explore(self, horizon_len: int):
+    def explore(self, env):
         pass
 
     def save_model(self, epochs):

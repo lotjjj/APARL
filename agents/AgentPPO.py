@@ -1,5 +1,6 @@
 from typing import Tuple
 import torch
+from mpmath import convert
 from torch import nn
 
 from agents.AgentBase import AgentAC
@@ -31,7 +32,7 @@ class AgentPPO(AgentAC):
         for _ in range(self.config.horizon_len):
             assert type(observation) == torch.Tensor
             action, log_prob = self.get_action(observation)
-            np_action = action.detach().cpu().numpy()
+            np_action = action.cpu().numpy()
 
             observations[_] = observation
             actions[_] = action
@@ -97,14 +98,14 @@ class AgentPPO(AgentAC):
             values_batch = self.critic(observations_batch)
 
             # actor loss
-            new_log_prob_batch, entropy_batch = self.actor.get_logprob_entropy(observations_batch, actions_batch)
+            new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)
 
             ratio = torch.exp(new_log_prob_batch - log_probs_batch.detach())
             surr1 = ratio * advantages_batch
             surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
             actor_loss = -torch.min(surr1, surr2).mean()
             entropy_loss = -self.config.entropy_coef * entropy_batch.mean()
-            actor_entropy_loss = actor_loss + entropy_loss
+            actor_entropy_loss = actor_loss # + entropy_loss
 
             # critic loss
             critic_loss = nn.MSELoss()(values_batch, reward_sums_batch)
@@ -160,22 +161,22 @@ class ActorPPO(nn.Module):
         else:
             self.policy_head = ContinuousPolicyHead([dims[-1], action_dim])
 
-        self.observation_avg = nn.Parameter(torch.zeros(observation_dim,), requires_grad=False)
-        self.observation_std = nn.Parameter(torch.ones(observation_dim,), requires_grad=False)
+        # self.observation_avg = nn.Parameter(torch.zeros(observation_dim,), requires_grad=False)
+        # self.observation_std = nn.Parameter(torch.ones(observation_dim,), requires_grad=False)
 
 
-    def observation_norm(self, observation: torch.Tensor):
-        return (observation - self.observation_avg) / (self.observation_std + 1e-6)
+    # def observation_norm(self, observation: torch.Tensor):
+    #     return (observation - self.observation_avg) / (self.observation_std + 1e-6)
 
     def forward(self, observation: torch.Tensor):
-        observation = self.observation_norm(observation)
+        # observation = self.observation_norm(observation)
         feature = self.feature_extractor(observation)
         if self.is_discrete:
             logits = self.policy_head(feature)
             return logits
         else:
             mu, std = self.policy_head(feature)
-            return mu, std
+            return self.convert_action(mu), std
 
     def get_action(self, observation: torch.Tensor):
         if self.is_discrete:
@@ -188,9 +189,10 @@ class ActorPPO(nn.Module):
             mu, std = self.forward(observation)
             dist = torch.distributions.Normal(mu, std)
             action = dist.sample()
-            return self.convert_actions(action), dist.log_prob(action)
+            log_prob = dist.log_prob(action)
+            return action, log_prob.sum(-1)
 
-    def get_logprob_entropy(self, observation: torch.Tensor, action: torch.Tensor):
+    def get_log_prob_entropy(self, observation: torch.Tensor, action: torch.Tensor):
         if self.is_discrete:
             logits = self.forward(observation)
             dist = torch.distributions.Categorical(logits=logits)
@@ -198,11 +200,13 @@ class ActorPPO(nn.Module):
         else:
             mu, std = self.forward(observation)
             dist = torch.distributions.Normal(mu, std)
-            return dist.log_prob(action), dist.entropy()
+            log_prob = dist.log_prob(action)
+            entropy = dist.entropy()
+            return log_prob.sum(-1),entropy.sum(-1)
 
     @staticmethod
-    def convert_actions(action: torch.Tensor):
-        return action.tanh()
+    def convert_action(action):
+        return torch.tanh(action)
 
 
 class CriticPPO(nn.Module):
@@ -211,12 +215,6 @@ class CriticPPO(nn.Module):
         dims = [ observation_dim, *dims]
         self.feature_extractor = FlattenExtractor(dims)
         self.value_head = nn.Linear(dims[-1], 1)
-
-        self.observation_avg = nn.Parameter(torch.zeros(observation_dim,), requires_grad=False)
-        self.observation_std = nn.Parameter(torch.ones(action_dim,), requires_grad=False)
-
-    def observation_norm(self, observation: torch.Tensor):
-        return (observation - self.observation_avg) / (self.observation_std + 1e-6)
 
     def forward(self, observation: torch.Tensor):
         feature = self.feature_extractor(observation)

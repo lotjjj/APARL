@@ -7,13 +7,12 @@ class ContinuousPolicyHead(nn.Module):
         super(ContinuousPolicyHead, self).__init__()
 
         self.net = build_mlp(dims=dims, activation=activation, end_with_activation=False)
-        self.log_std = nn.Parameter(torch.zeros((1,dims[-1])), requires_grad=True)
+        self.log_std = nn.Linear(dims[0], dims[-1])
 
     def forward(self, x):
         mu = self.net(x)
-        std = torch.exp(self.log_std)
+        std = torch.exp(self.log_std(x))
         return mu, std
-
 
 class DiscretePolicyHead(nn.Module):
     def __init__(self, dims, activation=nn.ReLU):

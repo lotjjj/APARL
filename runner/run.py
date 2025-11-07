@@ -4,6 +4,7 @@ import torch
 from tqdm import tqdm
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
+from modules.ReplayBuffer import ReplayBuffer
 from modules.config import PPOConfig, save_config
 
 import gymnasium as gym
@@ -15,11 +16,6 @@ def make_env(cfg, render_mode: str = None):
         single_env = gym.make(cfg.env_name, render_mode= render_mode)
 
         assert cfg.is_discrete == isinstance(single_env.action_space, gym.spaces.Discrete)
-
-        if not cfg.is_discrete:
-            single_env = gym.wrappers.RescaleAction(single_env,
-                                                    min_action=-np.ones(shape=single_env.action_space.shape),
-                                                    max_action=np.ones(shape=single_env.action_space.shape))
         single_env = gym.wrappers.FlattenObservation(single_env)
         return single_env
     return _init
@@ -58,8 +54,6 @@ def build_agent(cfg):
             raise ValueError(f'Unsupported algorithm: {cfg.algorithm}')
     except Exception as e:
         print(f'Error: {e}')
-
-    print(f'config -> {cfg.algorithm} agent and {cfg.env_name} env have been successfully built')
     return agent
 
 def train_agent(cfg=PPOConfig(), model_path: Path =None):
@@ -83,6 +77,8 @@ def train_agent(cfg=PPOConfig(), model_path: Path =None):
         return
 
     # init
+    buffer = () if cfg.is_on_policy else ReplayBuffer(cfg)
+
     observation, info = envs.reset()
     if cfg.num_envs == 1:
         assert observation.shape == (cfg.observation_dim,)
@@ -99,11 +95,15 @@ def train_agent(cfg=PPOConfig(), model_path: Path =None):
         pbar.update(start_epoch)
         while pbar.n < pbar.total:
 
-            buffer = agent.explore(envs)
-            actor_loss, critic_loss, entropy_loss = agent.update(buffer)
-            pbar.update(cfg.num_epochs)
+            buffer_items = agent.explore(envs) # on_policy: torch.Tensor, off_policy: ndarray
 
-            pbar.set_postfix(actor_loss=actor_loss, critic_loss=critic_loss, entropy_loss=entropy_loss)
+            if cfg.is_on_policy:
+                buffer = buffer_items # buffer: Tuple[torch.Tensor, ...]
+            else:
+                buffer.update_buffer_horizon(buffer_items) # ReplayBuffer: np.ndarray
+
+            agent.update(buffer)
+            pbar.update(cfg.num_epochs)
 
             idx = pbar.n-start_epoch
             if idx % (cfg.save_interval*cfg.num_epochs) == 0:
@@ -119,7 +119,7 @@ def train_agent(cfg=PPOConfig(), model_path: Path =None):
     print('Training finished')
 
 def evaluate_agent(agent, cfg):
-    env = gym.make(cfg.env_name, max_episode_steps=cfg.eval_max_episode_steps, render_mode= cfg.eval_render_mode)
+    env = make_env(cfg, render_mode=cfg.eval_render_mode)()
     with torch.no_grad():
         episode_reward = np.empty(cfg.eval_num_episodes)
         episode_steps = np.zeros(cfg.eval_num_episodes)
@@ -130,11 +130,11 @@ def evaluate_agent(agent, cfg):
             while True:
                 observation = torch.from_numpy(observation).to(cfg.device)
                 action, _ = agent.get_action(observation)
-                np_action = action.detach().cpu().numpy()
+                np_action = action.cpu().numpy()
                 observation, reward, termination, truncation, info = env.step(np_action)
                 total_reward += reward
                 steps += 1
-                if termination or truncation:
+                if termination or truncation or steps >= cfg.eval_max_episode_steps:
                     break
             episode_reward[episode] = total_reward
             episode_steps[episode] = steps

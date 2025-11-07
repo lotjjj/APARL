@@ -34,26 +34,26 @@ class BasicConfig:
     # Model
     policy: str = 'MlpPolicy'
     learning_rate: float = 3e-4
-    max_train_epochs: int = 100_000
+    max_train_epochs: int = 1_000_000
     max_grad_norm: float = 0.5
 
     # Device
     device: str = 'cpu'
 
     # Logging
-    daytime: str = field(default_factory=lambda: datetime.datetime.now().strftime('%Y%m%d'))
+    daytime: str = field(default_factory=lambda: datetime.datetime.now().strftime('%Y%m%d-%H%M'))
     root_dir: Path = field(init=False)
     log_dir: Path = field(init=False)
     config_dir: Path = field(init=False)
     log_interval: int = 10
-    save_interval: int = 60
+    save_interval: int = 600
     save_dir: Path = field(init=False)
     max_keep: int = 5
 
     # Evaluation
-    eval_num_episodes: int = 5
-    eval_max_episode_steps: int = 500
-    eval_interval: int = 30
+    eval_num_episodes: int = 10
+    eval_max_episode_steps: int = 1000
+    eval_interval: int = 200
     eval_render_mode: Optional[str] = None
 
     def __post_init__(self):
@@ -95,13 +95,13 @@ class BasicConfig:
 @dataclass
 class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
+    is_on_policy: bool = True
     clip_ratio: float = 0.2
     entropy_coef: float = 0.01
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
-    max_grad_norm: float = 0.5
     num_epochs: int = 3
-    batch_size: int = 64
+    batch_size: int = 511
 
     actor_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
     critic_dims: List[int] = field(default_factory=lambda: [256, 256, 256])
@@ -253,4 +253,5 @@ def wrap_config_from_dict(config: BasicConfig, update_dict: Dict[str, Any]) -> A
         config.validate_config()
 
     logger.info("Config updated from dictionary")
+    config.__post_init__()
     return config

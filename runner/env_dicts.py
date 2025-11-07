@@ -14,9 +14,10 @@ MountainCar_v0_dict = {
     'is_discrete': False
 }
 
-
-
-
+BipedalWalker_v3_dict = {
+    'env_name': 'BipedalWalker-v3',
+    'is_discrete': False,
+}
 
 
 
