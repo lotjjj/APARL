@@ -32,7 +32,6 @@ class ReplayBuffer:
             self.action_noises  = np.empty((self.buffer_size, self.num_envs, self.action_dim), dtype=np.float32)
 
 
-
     def update_buffer_horizon(self, items: Tuple):
         observations, actions, rewards, undone, unmasks = items
 
@@ -51,8 +50,6 @@ class ReplayBuffer:
             fill_len = self.buffer_size - self.pointer
 
             # replace the first expect_len - max_len
-            print(self.observations[self.pointer:self.buffer_size].shape)
-            print(observations[:fill_len].shape)
             self.observations[self.pointer:self.buffer_size], self.observations[:replace_len] = observations[:fill_len], observations[-replace_len:]
             self.actions[self.pointer:self.buffer_size], self.actions[:replace_len] = actions[:fill_len], actions[-replace_len:]
             self.rewards[self.pointer:self.buffer_size], self.rewards[:replace_len] = rewards[:fill_len], rewards[-replace_len:]
@@ -66,10 +63,6 @@ class ReplayBuffer:
         else:
             self.is_full = expect_len == self.buffer_size
 
-            print(self.observations[self.pointer:expect_len].shape)
-            print(observations.shape)
-            print(self.actions[self.pointer:expect_len].shape)
-            print(actions.shape)
             # fill
             self.observations[self.pointer:expect_len] = observations
             self.actions[self.pointer:expect_len] = actions

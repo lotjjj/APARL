@@ -1,24 +1,22 @@
 
-
-from modules.config import wrap_config_from_dict
-
 LunarLander_v3_dict = {
     'env_name': 'LunarLander-v3',
     'is_discrete': True,
+    'device': 'cpu',
 
     'horizon_len': 600,
-    'num_envs': 3,
+    'num_envs': 4,
     'batch_size': 255,
     'entropy_coef': 0.001,
-    'num_epochs': 2,
+    'num_epochs': 3,
 
-    'max_episode_steps': 500,
+    'max_episode_steps': 400,
     'eval_max_episode_steps': 400,
     'eval_num_episodes': 1,
     'eval_render_mode': 'None',
 
-    'actor_lr': 2e-5,
-    'critic_lr': 2e-5,
+    'actor_lr': 3e-5,
+    'critic_lr': 3e-5,
 
     'eval_interval': 50,
     'save_interval': 1000,

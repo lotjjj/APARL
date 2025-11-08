@@ -37,16 +37,17 @@ class AgentPPO(AgentAC):
 
             observation, reward, termination, truncation, info = env.step(np_action)
 
-            rewards[_] = torch.from_numpy(reward).to(device=self.config.device)
-            terminations[_] = torch.from_numpy(termination).to(device=self.config.device)
-            truncations[_] = torch.from_numpy(truncation).to(device=self.config.device)
-            observation = torch.from_numpy(observation).to(device=self.config.device)
+            rewards[_] = torch.from_numpy(reward)
+            terminations[_] = torch.from_numpy(termination)
+            truncations[_] = torch.from_numpy(truncation)
+            observation = torch.from_numpy(observation).to(self.config.device)
 
-        self.last_observation = observation.to(self.config.device)
+        self.last_observation = observation
         undone = torch.logical_not(terminations)
         unmasks = torch.logical_not(truncations)
         del terminations, truncations
-        return observations, actions, log_probs, rewards, undone, unmasks
+        return (observations.to(device=self.config.device), actions.to(device=self.config.device), log_probs.to(device=self.config.device),
+                rewards.to(device=self.config.device), undone.to(device=self.config.device), unmasks.to(device=self.config.device))
 
     def compute_gae_advantage(self, buffer: Tuple[torch.Tensor, ...]):
         observations, actions, log_probs, rewards, undone, unmasks = buffer
@@ -108,8 +109,6 @@ class AgentPPO(AgentAC):
             reward_sums_batch = reward_sums[ids0,ids1]
 
             values_batch = self.critic(observations_batch)
-
-
 
             # actor loss
             new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)

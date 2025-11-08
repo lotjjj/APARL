@@ -74,19 +74,19 @@ class AgentAC(AgentBase, ABC):
         pass
 
     def build_temp_buffer(self) -> Tuple[torch.Tensor, ...]:
-        observations = torch.empty((self.config.horizon_len, self.config.num_envs, self.config.observation_dim), dtype=torch.float32,device=self.config.device)
+        observations = torch.empty((self.config.horizon_len, self.config.num_envs, self.config.observation_dim), dtype=torch.float32)
 
         actions =  torch.empty(
             (self.config.horizon_len, self.config.num_envs, self.config.action_dim),
-            dtype=torch.float32,device=self.config.device)\
+            dtype=torch.float32)\
             if not self.config.is_discrete \
             else torch.empty((self.config.horizon_len, self.config.num_envs,),
-                             dtype=torch.int32,device=self.config.device)
+                             dtype=torch.int32)
 
-        log_probs = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,device=self.config.device)
-        rewards = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,device=self.config.device)
-        terminations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool,device=self.config.device)
-        truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool,device=self.config.device)
+        log_probs = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32)
+        rewards = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32)
+        terminations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool)
+        truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool)
         return observations, actions, log_probs, rewards, terminations, truncations
 
     def sample_idx(self):
