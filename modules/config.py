@@ -19,6 +19,7 @@ class BasicConfig:
     is_discrete: bool = True
     num_envs: int = 6
     vectorization_mode: str = 'async'
+    max_episode_steps: int = 300
     options: Dict[str, Any] = field(default_factory=lambda: {})
 
     # Algorithm
@@ -29,7 +30,7 @@ class BasicConfig:
 
     # Data
     batch_size: int = 64
-    horizon_len: int = 300
+    horizon_len: int = 600
     buffer_size: int = 1_000_000
 
     # Model
@@ -56,6 +57,7 @@ class BasicConfig:
     eval_max_episode_steps: int = 1000
     eval_interval: int = 600
     eval_render_mode: Optional[str] = None
+    eval_seed: int = 114514
 
     def __post_init__(self):
         self._setup_directories()
@@ -96,7 +98,7 @@ class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
     is_on_policy: bool = True
     clip_ratio: float = 0.2
-    entropy_coef: float = 0.1
+    entropy_coef: float = 1
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
     num_epochs: int = 4

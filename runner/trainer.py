@@ -15,5 +15,3 @@ if __name__ == '__main__':
 
     # train a new agent under above configurations
     train_agent(envs, cfg)
-
-

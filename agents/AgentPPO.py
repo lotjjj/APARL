@@ -1,7 +1,7 @@
 from typing import Tuple
 import torch
 from torch import nn
-
+from torch.nn import functional as F
 from agents.AgentBase import AgentAC
 
 
@@ -16,8 +16,8 @@ class AgentPPO(AgentAC):
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.config.critic_lr)
 
-    def get_action(self, observation: torch.Tensor):
-        actions, log_probs = self.actor.get_action(observation)
+    def get_action(self, observation: torch.Tensor, deterministic=False):
+        actions, log_probs = self.actor.get_action(observation, deterministic)
         return actions, log_probs
 
     def explore(self, env):
@@ -51,22 +51,35 @@ class AgentPPO(AgentAC):
     def compute_gae_advantage(self, buffer: Tuple[torch.Tensor, ...]):
         observations, actions, log_probs, rewards, undone, unmasks = buffer
         truncations = torch.logical_not(unmasks)
-        # add V to the last state as compensation
+        # add V to the last truncated state as compensation
         if torch.any(truncations):
-            # No compensation
-            # rewards[truncations] += self.critic(observations[truncations])
+            # compensation
+            # ElegantRL -> https://github.com/AI4Finance-Foundation/ElegantRL
+            # No clue why do this
+            # rewards[truncations] +=  self.critic(observations[truncations]).detach()
             undone[truncations] = False
+        # masks to stop the flow of the advantage
         masks = undone * self.config.gamma
+        # all state values
         values = self.critic(observations)
+        # all GAE advantages
         advantages = torch.empty_like(values)
-        next_state = self.last_observation.clone()
-        next_value = self.critic(next_state)
 
+        # s_t+1
+        next_state = self.last_observation.clone()
+        # V(s_t+1)
+        next_value = self.critic(next_state).detach()
+
+        # GAE advantage at time t
         advantage = torch.zeros_like(next_value)
 
         for i in reversed(range(self.config.horizon_len-1,-1,-1)):
+            # if truncated, it is V(s_t) + r_t,
+            # if terminated, it is one-step reward
+            # else it is an estimation of Q(s_t,a_t)
             next_value = rewards[i] + masks[i] * next_value
-            advantages[i] = advantage = next_value - values[i] + masks[i] * self.config.lambda_gae_adv * advantage
+            # GAE reverse
+            advantages[i] = advantage =  next_value - values[i] + masks[i] * self.config.lambda_gae_adv * advantage
             next_value = values[i]
         return advantages, values
 
@@ -75,9 +88,7 @@ class AgentPPO(AgentAC):
             observations, actions, log_probs, rewards, undone, unmasks = buffer
             advantages, values = self.compute_gae_advantage(buffer)
             reward_sums = advantages + values
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
             del rewards, undone, values
-
 
         critic_losses = torch.zeros(self.config.num_epochs)
         actor_losses = torch.zeros(self.config.num_epochs)
@@ -90,10 +101,15 @@ class AgentPPO(AgentAC):
             actions_batch = actions[ids0,ids1]
             # unmasks_batch = unmasks[ids0,ids1]
             log_probs_batch = log_probs[ids0,ids1]
+
             advantages_batch = advantages[ids0,ids1]
+            advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-5)
+
             reward_sums_batch = reward_sums[ids0,ids1]
 
             values_batch = self.critic(observations_batch)
+
+
 
             # actor loss
             new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)
@@ -106,7 +122,11 @@ class AgentPPO(AgentAC):
             actor_entropy_loss = actor_loss + entropy_loss
 
             # critic loss
-            critic_loss = nn.MSELoss()(values_batch, reward_sums_batch)
+            critic_loss = F.mse_loss(values_batch, reward_sums_batch)
+
+            # https://github.com/DLR-RM/stable-baselines3/blob/b018e4bc949503b990c3012c0e36c9384de770e6/stable_baselines3/ppo/ppo.py#L262
+            # approx KL divergence
+            # early stop
 
             self.optimizer_backward(self.actor_optimizer,  actor_entropy_loss)
             self.optimizer_backward(self.critic_optimizer, critic_loss)
@@ -138,10 +158,6 @@ class AgentPPO(AgentAC):
         except Exception as e:
             print(f'load model error: {e}')
 
-    def eval(self):
-        self.actor.eval()
-        self.critic.eval()
-
 from modules.Extractor import FlattenExtractor
 from modules.Head import ContinuousPolicyHead, DiscretePolicyHead
 
@@ -170,17 +186,23 @@ class ActorPPO(nn.Module):
             std = torch.exp(torch.clamp(log_std, min=-20, max=1))
             return self.convert_action(mu), std
 
-    def get_action(self, observation: torch.Tensor):
+    def get_action(self, observation: torch.Tensor, deterministic=False):
         if self.is_discrete:
             logits = self.forward(observation)
             dist = torch.distributions.Categorical(logits=logits)
-            action = dist.sample()
+            if deterministic:
+                action = dist.probs.argmax(-1)
+            else:
+                action = dist.sample()
             log_prob = dist.log_prob(action)
             return action, log_prob
         else:
             mu, std = self.forward(observation)
             dist = torch.distributions.Normal(mu, std)
-            action = dist.sample()
+            if deterministic:
+                action = mu
+            else:
+                action = dist.sample()
             log_prob = dist.log_prob(action)
             return action, log_prob.sum(-1)
 

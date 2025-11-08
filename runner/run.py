@@ -15,7 +15,7 @@ import functools
 
 def make_env(cfg, render_mode: str = None, wrappers=None):
     def _init():
-        env = gym.make(cfg.env_name, render_mode=render_mode)
+        env = gym.make(cfg.env_name, render_mode=render_mode, max_episode_steps=cfg.max_episode_steps)
         assert cfg.is_discrete == isinstance(env.action_space, gym.spaces.Discrete)
         all_wrappers = wrappers if wrappers else []
         return functools.reduce(lambda e, w: w(e), all_wrappers, env)
@@ -118,16 +118,18 @@ def train_agent(envs, cfg, model_path: Path =None):
 
 def evaluate_agent(agent, cfg):
     env = make_env(cfg, render_mode=cfg.eval_render_mode)()
+
+    # Performance: with no grad
     with torch.no_grad():
         episode_reward = np.empty(cfg.eval_num_episodes)
         episode_steps = np.zeros(cfg.eval_num_episodes)
         for episode in range(cfg.eval_num_episodes):
-            observation, info = env.reset()
+            observation, info = env.reset(seed=cfg.eval_seed+episode)
             total_reward = 0.0
             steps = 0
             while True:
                 observation = torch.from_numpy(observation).to(cfg.device)
-                action, _ = agent.get_action(observation)
+                action, _ = agent.get_action(observation, deterministic=True)
                 np_action = action.cpu().numpy()
                 observation, reward, termination, truncation, info = env.step(np_action)
                 total_reward += reward
@@ -137,7 +139,9 @@ def evaluate_agent(agent, cfg):
             episode_reward[episode] = total_reward
             episode_steps[episode] = steps
         mean_reward, std_reward = episode_reward.mean(), episode_reward.std()
+
         env.close()
+
         return mean_reward, std_reward, episode_reward, episode_steps
 
 

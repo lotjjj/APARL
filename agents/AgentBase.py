@@ -12,6 +12,7 @@ class AgentBase(ABC):
         self.config = config
         self.epochs = 0
 
+
     @abstractmethod
     def update(self, buffer):
         pass
@@ -26,6 +27,11 @@ class AgentBase(ABC):
 
     @abstractmethod
     def explore(self, env):
+        '''
+        Explore a fixed length of steps (config.horizon_len) in the env
+        :param env: gymnasium env, should be a vectorized env
+        :return: a tuple of observations, actions, log_probs, rewards, terminations, truncations
+        '''
         pass
 
     def save_model(self, epochs):
@@ -50,11 +56,6 @@ class AgentBase(ABC):
             return check_point
         except Exception as e:
             print(f'No such model')
-
-
-    @abstractmethod
-    def eval(self):
-        pass
 
     @property
     def _check_point(self):
@@ -85,7 +86,7 @@ class AgentAC(AgentBase, ABC):
         log_probs = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,device=self.config.device)
         rewards = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,device=self.config.device)
         terminations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool,device=self.config.device)
-        truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,device=self.config.device)
+        truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool,device=self.config.device)
         return observations, actions, log_probs, rewards, terminations, truncations
 
     def sample_idx(self):
