@@ -6,15 +6,19 @@ LunarLander_v3_dict = {
     'env_name': 'LunarLander-v3',
     'is_discrete': True,
 
-    'horizon_len': 400,
-    'num_envs': 6,
+    'horizon_len': 600,
+    'num_envs': 3,
     'batch_size': 255,
     'entropy_coef': 0.001,
+    'num_epochs': 2,
 
-    'max_episode_steps': 300,
+    'max_episode_steps': 500,
     'eval_max_episode_steps': 400,
-    'eval_num_episodes': 3,
+    'eval_num_episodes': 1,
     'eval_render_mode': 'None',
+
+    'actor_lr': 2e-5,
+    'critic_lr': 2e-5,
 
     'eval_interval': 50,
     'save_interval': 1000,
