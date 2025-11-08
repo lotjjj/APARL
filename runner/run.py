@@ -12,8 +12,7 @@ import gymnasium as gym
 import numpy as np
 import functools
 
-
-def make_env(cfg, render_mode: str = None, wrappers=None):
+def _make_env(cfg, render_mode: str = None, wrappers=None):
     def _init():
         env = gym.make(cfg.env_name, render_mode=render_mode, max_episode_steps=cfg.max_episode_steps)
         assert cfg.is_discrete == isinstance(env.action_space, gym.spaces.Discrete)
@@ -21,12 +20,15 @@ def make_env(cfg, render_mode: str = None, wrappers=None):
         return functools.reduce(lambda e, w: w(e), all_wrappers, env)
     return _init
 
+def make_eval_env(cfg):
+    env = gym.make(cfg.env_name, render_mode=cfg.eval_render_mode, max_episode_steps=cfg.eval_max_episode_steps)
+    return env
 
 def make_vec_env(cfg, render_mode=None, wrappers=None):
     if cfg.vectorization_mode == 'async':
-        envs = AsyncVectorEnv([make_env(cfg, render_mode, wrappers) for _ in range(cfg.num_envs)])
+        envs = AsyncVectorEnv([_make_env(cfg, render_mode, wrappers) for _ in range(cfg.num_envs)])
     elif cfg.vectorization_mode == 'sync':
-        envs = SyncVectorEnv([make_env(cfg, render_mode, wrappers) for _ in range(cfg.num_envs)])
+        envs = SyncVectorEnv([_make_env(cfg, render_mode, wrappers) for _ in range(cfg.num_envs)])
     else:
         raise ValueError(f'Unsupported vectorization mode: {cfg.vectorization_mode}')
 
@@ -52,7 +54,7 @@ def build_agent(cfg):
         print(f'Error: {e}')
     return agent
 
-def train_agent(envs, cfg, model_path: Path =None):
+def train_agent(envs, eval_env, cfg, model_path: Path =None):
     # agent
     agent = build_agent(cfg)
 
@@ -103,7 +105,7 @@ def train_agent(envs, cfg, model_path: Path =None):
             idx = pbar.n-start_epoch
 
             if idx % (cfg.eval_interval*cfg.num_epochs) == 0:
-                mean, std, seq, steps  = evaluate_agent(agent,cfg)
+                mean, std, seq, steps  = evaluate_agent(agent, eval_env,cfg)
                 tqdm.write(f'\nEvaluate agent at epoch {pbar.n}, eval episodes: {cfg.eval_num_episodes}, '
                            f'mean reward: {mean:.4f}, std: {std:.4f}, max_reward: {seq.max():.4f}, min_reward: {seq.min():.4f}, '
                            f'steps: {steps.mean()}/{cfg.eval_max_episode_steps}')
@@ -111,14 +113,13 @@ def train_agent(envs, cfg, model_path: Path =None):
             if idx % (cfg.save_interval*cfg.num_epochs) == 0:
                 agent.save_model(pbar.n)
 
+    eval_env.close()
     envs.close()
     agent.save_model(pbar.n)
     pbar.close()
     tqdm.write('Training finished')
 
-def evaluate_agent(agent, cfg):
-    env = make_env(cfg, render_mode=cfg.eval_render_mode)()
-
+def evaluate_agent(agent, env,  cfg):
     # Performance: with no grad
     with torch.no_grad():
         episode_reward = np.empty(cfg.eval_num_episodes)
@@ -139,9 +140,6 @@ def evaluate_agent(agent, cfg):
             episode_reward[episode] = total_reward
             episode_steps[episode] = steps
         mean_reward, std_reward = episode_reward.mean(), episode_reward.std()
-
-        env.close()
-
         return mean_reward, std_reward, episode_reward, episode_steps
 
 

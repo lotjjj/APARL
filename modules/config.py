@@ -53,8 +53,8 @@ class BasicConfig:
     max_keep: int = 5
 
     # Evaluation
-    eval_num_episodes: int = 10
-    eval_max_episode_steps: int = 1000
+    eval_num_episodes: int = 2
+    eval_max_episode_steps: int = 600
     eval_interval: int = 600
     eval_render_mode: Optional[str] = None
     eval_seed: int = 114514

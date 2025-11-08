@@ -12,7 +12,7 @@ LunarLander_v3_dict = {
 
     'max_episode_steps': 400,
     'eval_max_episode_steps': 400,
-    'eval_num_episodes': 1,
+    'eval_num_episodes': 2,
     'eval_render_mode': 'None',
 
     'actor_lr': 3e-5,
