@@ -2,6 +2,7 @@ from typing import Tuple
 import torch
 from torch import nn
 from torch.nn import functional as F
+
 from agents.AgentBase import AgentAC
 
 
@@ -10,8 +11,8 @@ class AgentPPO(AgentAC):
         super().__init__(config)
         self.last_observation = None
 
-        self.actor = ActorPPO(self.config.observation_dim, self.config.action_dim, self.config.actor_dims, self.config.is_discrete).to(self.config.device)
-        self.critic = CriticPPO(self.config.observation_dim, self.config.action_dim, self.config.critic_dims).to(self.config.device)
+        self.actor = ActorPPO(self.config.observation_dim, self.config.action_dim, self.config.actor_dims, self.config.is_discrete).to(self.device)
+        self.critic = CriticPPO(self.config.observation_dim, self.config.action_dim, self.config.critic_dims).to(self.device)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.config.critic_lr)
@@ -40,14 +41,14 @@ class AgentPPO(AgentAC):
             rewards[_] = torch.from_numpy(reward)
             terminations[_] = torch.from_numpy(termination)
             truncations[_] = torch.from_numpy(truncation)
-            observation = torch.from_numpy(observation).to(self.config.device)
+            observation = torch.from_numpy(observation).to(self.device)
 
         self.last_observation = observation
         undone = torch.logical_not(terminations)
         unmasks = torch.logical_not(truncations)
         del terminations, truncations
-        return (observations.to(device=self.config.device), actions.to(device=self.config.device), log_probs.to(device=self.config.device),
-                rewards.to(device=self.config.device), undone.to(device=self.config.device), unmasks.to(device=self.config.device))
+        return (observations.to(device=self.device), actions.to(device=self.device), log_probs.to(device=self.device),
+                rewards.to(device=self.device), undone.to(device=self.device), unmasks.to(device=self.device))
 
     def compute_gae_advantage(self, buffer: Tuple[torch.Tensor, ...]):
         observations, actions, log_probs, rewards, undone, unmasks = buffer
@@ -57,7 +58,7 @@ class AgentPPO(AgentAC):
             # compensation
             # ElegantRL -> https://github.com/AI4Finance-Foundation/ElegantRL
             # No clue why do this
-            # rewards[truncations] +=  self.critic(observations[truncations]).detach()
+            rewards[truncations] +=  self.critic(observations[truncations]).detach()
             undone[truncations] = False
         # masks to stop the flow of the advantage
         masks = undone * self.config.gamma
@@ -114,6 +115,9 @@ class AgentPPO(AgentAC):
             new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)
 
             ratio = torch.exp(new_log_prob_batch - log_probs_batch.detach())
+            # pbar.set_postfix(ratio_max=ratio.max().cpu().item(), ratio_min=ratio.min().cpu().item())
+
+            # print(ratio.max())
             surr1 = ratio * advantages_batch
             surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
             actor_loss = -torch.min(surr1, surr2).mean()
@@ -127,13 +131,16 @@ class AgentPPO(AgentAC):
             # approx KL divergence
             # early stop
 
-            self.optimizer_backward(self.actor_optimizer,  actor_entropy_loss)
             self.optimizer_backward(self.critic_optimizer, critic_loss)
+            self.optimizer_backward(self.actor_optimizer,  actor_entropy_loss)
+
             actor_losses[_] = actor_loss
             critic_losses[_] = critic_loss
             entropy_losses[_] = entropy_loss
 
-        return actor_losses.mean().cpu().item(), entropy_losses.mean().cpu().item(),critic_losses.mean().cpu().item()
+        self.logger.add_scalar('actor_loss', actor_losses.mean().cpu().item(), self.epochs)
+        self.logger.add_scalar('critic_loss', critic_losses.mean().cpu().item(), self.epochs)
+        self.logger.add_scalar('entropy_loss', entropy_losses.mean().cpu().item(), self.epochs)
 
     @property
     def _check_point(self):
@@ -215,7 +222,7 @@ class ActorPPO(nn.Module):
             dist = torch.distributions.Normal(mu, std)
             log_prob = dist.log_prob(action)
             entropy = dist.entropy()
-            return log_prob.sum(-1),entropy.sum(-1)
+            return log_prob.sum(-1), entropy.sum(-1)
 
     @staticmethod
     def convert_action(action):

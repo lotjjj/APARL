@@ -37,7 +37,7 @@ class BasicConfig:
     policy: str = 'MlpPolicy'
     learning_rate: float = 3e-4
     max_train_epochs: int = 1_000_000
-    max_grad_norm: float = 0.5
+    max_grad_norm: float = 2
 
     # Device
     device: str = 'cpu'
@@ -97,11 +97,11 @@ class BasicConfig:
 class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
     is_on_policy: bool = True
-    clip_ratio: float = 0.2
-    entropy_coef: float = 1
+    clip_ratio: float = 0.1
+    entropy_coef: float = 0.01
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
-    num_epochs: int = 4
+    num_epochs: int = 6
     batch_size: int = 511
 
     actor_dims: List[int] = field(default_factory=lambda: [256, 256])

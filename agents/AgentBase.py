@@ -3,15 +3,17 @@ from typing import Tuple
 import torch
 from torch import nn
 import re
-
 from tqdm import tqdm
+
+from modules.logger import Logger
 
 
 class AgentBase(ABC):
     def __init__(self, config):
         self.config = config
+        self.device = config.device
         self.epochs = 0
-
+        self.logger = Logger(config)
 
     @abstractmethod
     def update(self, buffer):
@@ -34,10 +36,10 @@ class AgentBase(ABC):
         '''
         pass
 
-    def save_model(self, epochs):
-        path = self.config.save_dir / f'{self.config.algorithm}_epochs_{epochs}.pth'
+    # I/O
+    def save_model(self):
+        path = self.config.save_dir / f'{self.config.algorithm}_epochs_{self.epochs}.pth'
 
-        self.epochs = epochs
         plist = list(path.parent.glob(f'{self.config.algorithm}_epochs_*.pth'))
         if len(plist) > self.config.max_keep:
             plist_sorted = sorted(plist, key=lambda x: int(re.search(r'epochs_(\d+).pth', x.name).group(1)))
@@ -56,6 +58,14 @@ class AgentBase(ABC):
             return check_point
         except Exception as e:
             print(f'No such model')
+
+    def load_model_from_epochs(self, epochs):
+        path = self.config.save_dir / f'{self.config.algorithm}_epochs_{epochs}.pth'
+        return self.load_model(path)
+
+    def eval_model(self, env):
+        pass
+
 
     @property
     def _check_point(self):

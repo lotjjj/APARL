@@ -105,43 +105,44 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
             idx = pbar.n-start_epoch
 
             if idx % (cfg.eval_interval*cfg.num_epochs) == 0:
-                mean, std, seq, steps  = evaluate_agent(agent, eval_env,cfg)
-                tqdm.write(f'\nEvaluate agent at epoch {pbar.n}, eval episodes: {cfg.eval_num_episodes}, '
-                           f'mean reward: {mean:.4f}, std: {std:.4f}, max_reward: {seq.max():.4f}, min_reward: {seq.min():.4f}, '
-                           f'steps: {steps.mean()}/{cfg.eval_max_episode_steps}')
+                evaluate_agent(agent, eval_env, cfg.eval_num_episodes, cfg.eval_seed)
 
             if idx % (cfg.save_interval*cfg.num_epochs) == 0:
-                agent.save_model(pbar.n)
+                agent.save_model()
+
+            agent.epochs = pbar.n
 
     eval_env.close()
     envs.close()
-    agent.save_model(pbar.n)
+    agent.save_model()
     pbar.close()
     tqdm.write('Training finished')
 
-def evaluate_agent(agent, env,  cfg):
+def evaluate_agent(agent, env,  test_num, eval_seed):
     # Performance: with no grad
+    logger = agent.logger
     with torch.no_grad():
-        episode_reward = np.empty(cfg.eval_num_episodes)
-        episode_steps = np.zeros(cfg.eval_num_episodes)
-        for episode in range(cfg.eval_num_episodes):
-            observation, info = env.reset(seed=cfg.eval_seed+episode)
+        episode_reward = np.empty(test_num)
+        episode_steps = np.zeros(test_num)
+        for episode in range(test_num):
+            observation, info = env.reset(seed=eval_seed+episode)
             total_reward = 0.0
             steps = 0
             while True:
-                observation = torch.from_numpy(observation).to(cfg.device)
+                observation = torch.from_numpy(observation).to(agent.device)
                 action, _ = agent.get_action(observation, deterministic=True)
                 np_action = action.cpu().numpy()
                 observation, reward, termination, truncation, info = env.step(np_action)
                 total_reward += reward
                 steps += 1
-                if termination or truncation or steps >= cfg.eval_max_episode_steps:
+                if termination or truncation:
                     break
             episode_reward[episode] = total_reward
             episode_steps[episode] = steps
-        mean_reward, std_reward = episode_reward.mean(), episode_reward.std()
-        return mean_reward, std_reward, episode_reward, episode_steps
-
+        logger.add_scalar('online_eval/mean_reward', episode_reward.mean(), agent.epochs)
+        logger.add_scalar('online_eval/std_reward', episode_reward.std(), agent.epochs)
+        logger.add_scalar('online_eval/max_reward', episode_reward.max(), agent.epochs)
+        logger.add_scalar('online_eval/min_reward', episode_reward.min(), agent.epochs)
 
 
 
