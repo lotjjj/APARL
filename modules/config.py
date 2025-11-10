@@ -91,7 +91,7 @@ class BasicConfig:
         print(f"   - Device: {self.device}")
         print(f"   - Logs: {self.log_dir}")
         print(f"   - Models: {self.save_dir}")
-
+        print(f"   - Batch size: {self.batch_size}")
 
 @dataclass
 class PPOConfig(BasicConfig):

@@ -89,7 +89,11 @@ class AgentPPO(AgentAC):
         with torch.no_grad():
             observations, actions, log_probs, rewards, undone, unmasks = buffer
             advantages, values = self.compute_gae_advantage(buffer)
-            reward_sums = advantages + values
+            values_target = advantages + values
+
+            rewards_avg = rewards.mean()
+            self.logger.add_scalar('reward/reward_avg', rewards_avg.cpu().item(), self.epochs)
+
             del rewards, undone, values
 
         critic_losses = torch.zeros(self.config.num_epochs)
@@ -97,6 +101,8 @@ class AgentPPO(AgentAC):
         entropy_losses = torch.zeros(self.config.num_epochs)
 
         for _ in range(self.config.num_epochs):
+
+            self.epochs += 1
             ids0, ids1 = self.sample_idx()
 
             observations_batch = observations[ids0,ids1]
@@ -107,7 +113,7 @@ class AgentPPO(AgentAC):
             advantages_batch = advantages[ids0,ids1]
             advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-5)
 
-            reward_sums_batch = reward_sums[ids0,ids1]
+            values_target_batch = values_target[ids0,ids1]
 
             values_batch = self.critic(observations_batch)
 
@@ -125,7 +131,7 @@ class AgentPPO(AgentAC):
             actor_entropy_loss = actor_loss + entropy_loss
 
             # critic loss
-            critic_loss = F.mse_loss(values_batch, reward_sums_batch)
+            critic_loss = F.mse_loss(values_batch, values_target_batch)
 
             # https://github.com/DLR-RM/stable-baselines3/blob/b018e4bc949503b990c3012c0e36c9384de770e6/stable_baselines3/ppo/ppo.py#L262
             # approx KL divergence
@@ -138,9 +144,11 @@ class AgentPPO(AgentAC):
             critic_losses[_] = critic_loss
             entropy_losses[_] = entropy_loss
 
-        self.logger.add_scalar('actor_loss', actor_losses.mean().cpu().item(), self.epochs)
-        self.logger.add_scalar('critic_loss', critic_losses.mean().cpu().item(), self.epochs)
-        self.logger.add_scalar('entropy_loss', entropy_losses.mean().cpu().item(), self.epochs)
+        self.logger.add_scalar('loss/actor_loss', actor_losses.mean().cpu().item(), self.epochs)
+        self.logger.add_scalar('loss/critic_loss', critic_losses.mean().cpu().item(), self.epochs)
+        self.logger.add_scalar('loss/entropy_loss', entropy_losses.mean().cpu().item(), self.epochs)
+        self.logger.add_scalar('loss/actor_entropy_loss', (actor_losses + entropy_losses).mean().cpu().item(), self.epochs)
+
 
     @property
     def _check_point(self):

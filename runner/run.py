@@ -101,7 +101,6 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
 
             agent.update(buffer)
             pbar.update(cfg.num_epochs)
-            agent.epochs = pbar.n
 
             idx = pbar.n-start_epoch
 
@@ -138,11 +137,11 @@ def evaluate_agent(agent, env,  test_num, eval_seed):
                     break
             episode_reward[episode] = total_reward
             episode_steps[episode] = steps
-        logger.add_scalar('online_eval/mean_reward', episode_reward.mean(), agent.epochs)
-        logger.add_scalar('online_eval/std_reward', episode_reward.std(), agent.epochs)
-        logger.add_scalar('online_eval/max_reward', episode_reward.max(), agent.epochs)
-        logger.add_scalar('online_eval/min_reward', episode_reward.min(), agent.epochs)
-        logger.add_scalar('online_eval/mean_steps', episode_steps.mean(), agent.epochs)
+        logger.add_scalar('eval/mean_reward', episode_reward.mean(), agent.epochs)
+        logger.add_scalar('eval/std_reward', episode_reward.std(), agent.epochs)
+        logger.add_scalar('eval/max_reward', episode_reward.max(), agent.epochs)
+        logger.add_scalar('eval/min_reward', episode_reward.min(), agent.epochs)
+        logger.add_scalar('eval/mean_steps', episode_steps.mean(), agent.epochs)
 
 
 
