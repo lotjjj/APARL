@@ -101,56 +101,60 @@ class AgentPPO(AgentAC):
         critic_losses = torch.zeros(self.config.num_epochs)
         actor_losses = torch.zeros(self.config.num_epochs)
         entropy_losses = torch.zeros(self.config.num_epochs)
-
         for _ in range(self.config.num_epochs):
-
             self.epochs += 1
-            ids0, ids1 = self.sample_idx()
+            ids0, ids1 = self.shuffle_idx()
+            for start in range(0, self.config.horizon_len * self.config.num_envs, self.config.batch_size):
+                end = start + self.config.batch_size
 
-            observations_batch = observations[ids0,ids1]
-            actions_batch = actions[ids0,ids1]
-            # unmasks_batch = unmasks[ids0,ids1]
-            log_probs_batch = log_probs[ids0,ids1]
+                observations_batch = observations[ids0[start:end],ids1[start:end]]
+                actions_batch = actions[ids0[start:end],ids1[start:end]]
+                # unmasks_batch = unmasks[ids0[start:end],ids1[start:end]]
+                log_probs_batch = log_probs[ids0[start:end],ids1[start:end]]
 
-            advantages_batch = advantages[ids0,ids1]
-            advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-5)
+                advantages_batch = advantages[ids0[start:end],ids1[start:end]]
+                advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-8)
+                values_target_batch = values_target[ids0[start:end],ids1[start:end]]
 
-            values_target_batch = values_target[ids0,ids1]
+                values_batch = self.critic(observations_batch)
 
-            values_batch = self.critic(observations_batch)
+                new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)
 
-            # actor loss
-            new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)
+                ratio = torch.exp(new_log_prob_batch - log_probs_batch.detach())
 
-            ratio = torch.exp(new_log_prob_batch - log_probs_batch.detach())
-            # pbar.set_postfix(ratio_max=ratio.max().cpu().item(), ratio_min=ratio.min().cpu().item())
+                surr1 = ratio * advantages_batch
+                surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
+                actor_loss = -torch.min(surr1, surr2).mean()
+                entropy_loss = -self.config.entropy_coef * entropy_batch.mean()
+                actor_entropy_loss = actor_loss + entropy_loss
 
-            # print(ratio.max())
-            surr1 = ratio * advantages_batch
-            surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
-            actor_loss = -torch.min(surr1, surr2).mean()
-            entropy_loss = -self.config.entropy_coef * entropy_batch.mean()
-            actor_entropy_loss = actor_loss + entropy_loss
+                # critic loss
+                critic_loss = F.mse_loss(values_batch, values_target_batch)
 
-            # critic loss
-            critic_loss = F.mse_loss(values_batch, values_target_batch)
+                # https://github.com/DLR-RM/stable-baselines3/blob/b018e4bc949503b990c3012c0e36c9384de770e6/stable_baselines3/ppo/ppo.py#L262
+                # approx KL divergence
+                # early stop
 
-            # https://github.com/DLR-RM/stable-baselines3/blob/b018e4bc949503b990c3012c0e36c9384de770e6/stable_baselines3/ppo/ppo.py#L262
-            # approx KL divergence
-            # early stop
+                self.optimizer_backward(self.critic_optimizer, critic_loss)
+                self.optimizer_backward(self.actor_optimizer,  actor_entropy_loss)
 
-            self.optimizer_backward(self.critic_optimizer, critic_loss)
-            self.optimizer_backward(self.actor_optimizer,  actor_entropy_loss)
-
-            actor_losses[_] = actor_loss
-            critic_losses[_] = critic_loss
-            entropy_losses[_] = entropy_loss
+                actor_losses[_] += actor_loss
+                critic_losses[_] += critic_loss
+                entropy_losses[_] += entropy_loss
 
         self.logger.add_scalar('loss/actor_loss', actor_losses.mean().cpu().item(), self.epochs)
         self.logger.add_scalar('loss/critic_loss', critic_losses.mean().cpu().item(), self.epochs)
         self.logger.add_scalar('loss/entropy_loss', entropy_losses.mean().cpu().item(), self.epochs)
         self.logger.add_scalar('loss/actor_entropy_loss', (actor_losses + entropy_losses).mean().cpu().item(), self.epochs)
 
+    def get_objectives(self):
+        pass
+
+    def shuffle_idx(self):
+        ids =  torch.randperm(self.config.horizon_len * self.config.num_envs, requires_grad=False, device=self.device)
+        ids0 = torch.fmod(ids, self.config.horizon_len)
+        ids1 = torch.div(ids, self.config.horizon_len, rounding_mode='floor')
+        return ids0, ids1
 
     @property
     def _check_point(self):

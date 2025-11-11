@@ -107,12 +107,6 @@ class AgentAC(AgentBase, ABC):
         truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool)
         return observations, actions, log_probs, rewards, terminations, truncations
 
-    def sample_idx(self):
-        ids =  torch.randint(0, self.config.horizon_len * self.config.num_envs, size = (self.config.batch_size,), requires_grad=False, device=self.device)
-        ids0 = torch.fmod(ids, self.config.horizon_len)
-        ids1 = torch.div(ids, self.config.horizon_len, rounding_mode='floor')
-        return ids0, ids1
-
 class AgentQ(AgentBase, ABC):
     def __init__(self, config):
         super(AgentQ, self).__init__(config)

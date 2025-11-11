@@ -4,8 +4,8 @@ LunarLander_v3_dict = {
     'is_discrete': True,
     'device': 'cpu',
 
-    'horizon_len': 2400,
-    'num_envs': 4,
+    'horizon_len': 1200,
+    'num_envs': 6,
     'batch_size': 511,
     'entropy_coef': 0.05,
     'clip_ratio': 0.1,
@@ -13,8 +13,8 @@ LunarLander_v3_dict = {
     'num_epochs': 8,
     'max_grad_norm': 0.5,
 
-    'max_episode_steps': 800,
-    'eval_max_episode_steps': 800,
+    'max_episode_steps': 400,
+    'eval_max_episode_steps': 400,
     'eval_num_episodes': 1,
     'eval_render_mode': None,
 
