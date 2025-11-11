@@ -23,8 +23,8 @@ class ReplayBuffer:
         self.actions = np.empty((self.buffer_size, self.num_envs, ), dtype=np.float32) if cfg.is_discrete \
             else np.empty((self.buffer_size, self.num_envs, self.action_dim), dtype=np.float32)
         self.rewards = np.empty((self.buffer_size, self.num_envs), dtype=np.float32)
-        self.unmasks = np.empty((self.buffer_size, self.num_envs), dtype=np.float32) # Not Truncated
-        self.undone = np.empty((self.buffer_size, self.num_envs), dtype=np.float32) # Not Terminated
+        self.unmasks = np.empty((self.buffer_size, self.num_envs), dtype=np.bool) # Not Truncated
+        self.undone = np.empty((self.buffer_size, self.num_envs), dtype=np.bool) # Not Terminated
 
         if cfg.is_discrete:
             self.action_log_probs = np.empty((self.buffer_size, self.num_envs, self.action_dim), dtype=np.float32)

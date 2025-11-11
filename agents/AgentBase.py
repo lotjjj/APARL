@@ -13,6 +13,7 @@ class AgentBase(ABC):
         self.config = config
         self.device = config.device
         self.epochs = 0
+        self.last_observation = None
         self.logger = Logger(config)
 
     @abstractmethod
@@ -71,6 +72,13 @@ class AgentBase(ABC):
     def _check_point(self):
         return {}
 
+    @staticmethod
+    def _init_weights(model):
+        for m in model.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                nn.init.constant_(m.bias, 0)
+
     def optimizer_backward(self, optimizer: torch.optim.Optimizer , loss: torch.Tensor):
         optimizer.zero_grad()
         loss.backward()
@@ -100,7 +108,7 @@ class AgentAC(AgentBase, ABC):
         return observations, actions, log_probs, rewards, terminations, truncations
 
     def sample_idx(self):
-        ids =  torch.randint(0, self.config.horizon_len * self.config.num_envs, size = (self.config.batch_size,), requires_grad=False, device=self.config.device)
+        ids =  torch.randint(0, self.config.horizon_len * self.config.num_envs, size = (self.config.batch_size,), requires_grad=False, device=self.device)
         ids0 = torch.fmod(ids, self.config.horizon_len)
         ids1 = torch.div(ids, self.config.horizon_len, rounding_mode='floor')
         return ids0, ids1
