@@ -7,10 +7,10 @@ LunarLander_v3_dict = {
     'horizon_len': 1200,
     'num_envs': 6,
     'batch_size': 511,
-    'entropy_coef': 0.05,
+    'entropy_coef': 0.01,
     'clip_ratio': 0.1,
     'lambda_gae_adv': 0.95,
-    'num_epochs': 8,
+    'num_epochs': 16,
     'max_grad_norm': 0.5,
 
     'max_episode_steps': 400,
