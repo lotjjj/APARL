@@ -13,41 +13,54 @@ class AgentPPO(AgentAC):
         self.actor = ActorPPO(self.config.observation_dim, self.config.action_dim, self.config.actor_dims, self.config.is_discrete).to(self.device)
         self.critic = CriticPPO(self.config.observation_dim, self.config.critic_dims).to(self.device)
 
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.config.critic_lr)
+        self.optimizer = torch.optim.Adam([
+            {'params': self.actor.parameters(), 'lr': self.config.actor_lr },
+            {'params': self.critic.parameters(), 'lr': self.config.critic_lr }
+        ])
 
     def get_action(self, observation: torch.Tensor, deterministic=False):
         actions, log_probs = self.actor.get_action(observation, deterministic)
         return actions, log_probs
 
     def explore(self, env):
+        """
+        Interact with the environment and collect experience.
 
+        Args:
+            env: The environment to interact with
+
+        Returns:
+            A tuple of (observations, actions, log_probs, rewards, terminations, truncations)
+        """
+        # Prepare buffers
         observations, actions, log_probs, rewards, terminations, truncations = self.build_temp_buffer()
 
-        observation = self.last_observation
+        # Start interaction
+        for step in range(self.config.horizon_len):
+            # Get current observation
+            observation = self.last_observation
 
-        for _ in range(self.config.horizon_len):
-            assert type(observation) == torch.Tensor
+            # Get action and log probability
             action, log_prob = self.get_action(observation)
+
+            # Store observation and action
+            observations[step] = observation
+            actions[step] = action
+            log_probs[step] = log_prob
+
+            # Step in environment
             np_action = action.cpu().numpy()
+            next_observation, reward, termination, truncation, info = env.step(np_action)
 
-            observations[_] = observation
-            actions[_] = action
-            log_probs[_] = log_prob
+            # Store reward and done flags
+            rewards[step] = torch.from_numpy(reward).to(self.device)
+            terminations[step] = torch.from_numpy(termination).to(self.device)
+            truncations[step] = torch.from_numpy(truncation).to(self.device)
 
-            observation, reward, termination, truncation, info = env.step(np_action)
+            # Update last observation
+            self.last_observation = torch.from_numpy(next_observation).to(self.device)
 
-            rewards[_] = torch.from_numpy(reward)
-            terminations[_] = torch.from_numpy(termination)
-            truncations[_] = torch.from_numpy(truncation)
-            observation = torch.from_numpy(observation).to(self.device)
-
-        self.last_observation = observation
-        undone = torch.logical_not(terminations)
-        unmasks = torch.logical_not(truncations)
-        del terminations, truncations
-        return (observations.to(device=self.device), actions.to(device=self.device), log_probs.to(device=self.device),
-                rewards.to(device=self.device), undone.to(device=self.device), unmasks.to(device=self.device))
+        return observations, actions, log_probs, rewards, terminations, truncations
 
     def compute_gae_advantage(self, buffer: Tuple[torch.Tensor, ...]):
         observations, actions, log_probs, rewards, undone, unmasks = buffer
@@ -63,6 +76,7 @@ class AgentPPO(AgentAC):
         masks = undone * self.config.gamma
         # all state values
         values = self.critic(observations).detach()
+
         # all GAE advantages
         advantages = torch.empty_like(values)
 
@@ -85,9 +99,11 @@ class AgentPPO(AgentAC):
         return advantages, values
 
     def update(self, buffer: Tuple[torch.Tensor, ...]):
+
         with torch.no_grad():
             observations, actions, log_probs, rewards, undone, unmasks = buffer
             advantages, values = self.compute_gae_advantage(buffer)
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
             values_target = advantages + values
 
             rewards_avg = rewards.mean()
@@ -108,23 +124,21 @@ class AgentPPO(AgentAC):
                 observations_batch = observations[id_horizon, id_env]
                 actions_batch = actions[id_horizon, id_env]
                 # unmasks_batch = unmasks[id_horizon, id_env]
-                log_probs_batch = log_probs[id_horizon, id_env]
+                log_probs_batch = log_probs[id_horizon, id_env].detach()
 
                 advantages_batch = advantages[id_horizon, id_env]
-                advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-8)
                 values_target_batch = values_target[id_horizon, id_env]
 
                 values_batch = self.critic(observations_batch)
 
                 new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)
 
-                ratio = torch.exp(new_log_prob_batch - log_probs_batch)
+                ratio = (new_log_prob_batch - log_probs_batch).exp()
 
                 surr1 = ratio * advantages_batch
                 surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
                 actor_loss = -torch.min(surr1, surr2).mean()
-                entropy_loss = -self.config.entropy_coef * entropy_batch.mean()
-                actor_entropy_loss = actor_loss + entropy_loss
+                entropy_loss = - self.config.entropy_coef * entropy_batch.mean()
 
                 # critic loss
                 critic_loss = nn.MSELoss()(values_batch, values_target_batch)
@@ -132,9 +146,9 @@ class AgentPPO(AgentAC):
                 # https://github.com/DLR-RM/stable-baselines3/blob/b018e4bc949503b990c3012c0e36c9384de770e6/stable_baselines3/ppo/ppo.py#L262
                 # approx KL divergence
                 # early stop
+                loss = self.config.value_coef * critic_loss +actor_loss + entropy_loss
 
-                self.optimizer_backward(self.critic_optimizer, critic_loss)
-                self.optimizer_backward(self.actor_optimizer,  actor_entropy_loss)
+                self.optimizer_backward(self.optimizer, loss)
 
                 actor_losses[_] += actor_loss
                 critic_losses[_] += critic_loss
@@ -225,7 +239,7 @@ class ActorPPO(nn.Module):
             else:
                 action = dist.sample()
             log_prob = dist.log_prob(action)
-            return action.detach(), log_prob.detach()
+            return action, log_prob
         else:
             mu, std = self.forward(observation)
             dist = torch.distributions.Normal(mu, std)
@@ -234,7 +248,7 @@ class ActorPPO(nn.Module):
             else:
                 action = dist.sample()
             log_prob = dist.log_prob(action)
-            return action.detach(), log_prob.sum(-1).detach()
+            return action, log_prob.sum(-1)
 
     def get_log_prob_entropy(self, observation: torch.Tensor, action: torch.Tensor):
         if self.is_discrete:
