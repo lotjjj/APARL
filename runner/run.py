@@ -102,6 +102,7 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
 
             agent.update(buffer)
             pbar.update(onestep)
+            agent.steps += onestep
 
             idx = pbar.n-start_steps
 
