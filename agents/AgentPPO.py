@@ -1,7 +1,6 @@
 from typing import Tuple
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 from agents.AgentBase import AgentAC
 
@@ -121,7 +120,7 @@ class AgentPPO(AgentAC):
 
                 new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)
 
-                ratio = torch.exp(new_log_prob_batch - log_probs_batch.detach())
+                ratio = torch.exp(new_log_prob_batch - log_probs_batch)
 
                 surr1 = ratio * advantages_batch
                 surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
@@ -130,7 +129,7 @@ class AgentPPO(AgentAC):
                 actor_entropy_loss = actor_loss + entropy_loss
 
                 # critic loss
-                critic_loss = F.mse_loss(values_batch, values_target_batch)
+                critic_loss = nn.MSELoss()(values_batch, values_target_batch)
 
                 # https://github.com/DLR-RM/stable-baselines3/blob/b018e4bc949503b990c3012c0e36c9384de770e6/stable_baselines3/ppo/ppo.py#L262
                 # approx KL divergence
