@@ -12,8 +12,8 @@ class AgentBase(ABC):
     def __init__(self, config):
         self.config = config
         self.device = config.device
-        self.epochs = 0
         self.last_observation = None
+        self.steps = 0
         self.logger = Logger(config)
 
     @abstractmethod
@@ -39,11 +39,11 @@ class AgentBase(ABC):
 
     # I/O
     def save_model(self):
-        path = self.config.save_dir / f'{self.config.algorithm}_epochs_{self.epochs}.pth'
+        path = self.config.save_dir / f'{self.config.algorithm}_steps_{self.steps}.pth'
 
-        plist = list(path.parent.glob(f'{self.config.algorithm}_epochs_*.pth'))
+        plist = list(path.parent.glob(f'{self.config.algorithm}_steps_*.pth'))
         if len(plist) > self.config.max_keep:
-            plist_sorted = sorted(plist, key=lambda x: int(re.search(r'epochs_(\d+).pth', x.name).group(1)))
+            plist_sorted = sorted(plist, key=lambda x: int(re.search(r'steps_(\d+).pth', x.name).group(1)))
 
             for i in range(len(plist_sorted) - self.config.max_keep):
                 old_path = plist_sorted[i]
@@ -55,13 +55,13 @@ class AgentBase(ABC):
     def load_model(self, path):
         try:
             check_point = torch.load(path)
-            self.epochs = check_point['epochs']
+            self.steps = check_point['steps']
             return check_point
         except Exception as e:
             print(f'No such model')
 
-    def load_model_from_epochs(self, epochs):
-        path = self.config.save_dir / f'{self.config.algorithm}_epochs_{epochs}.pth'
+    def load_model_from_steps(self, steps):
+        path = self.config.save_dir / f'{self.config.algorithm}_steps_{steps}.pth'
         return self.load_model(path)
 
     def eval_model(self, env):

@@ -4,11 +4,11 @@ LunarLander_v3_dict = {
     'is_discrete': True,
     'device': 'cpu',
 
-    'horizon_len': 1200,
+    'horizon_len': 800,
     'num_envs': 6,
-    'batch_size': 511,
-    'entropy_coef': 0.01,
-    'clip_ratio': 0.1,
+    'batch_size': 256,
+    'entropy_coef': 0.001,
+    'clip_ratio': 0.2,
     'lambda_gae_adv': 0.95,
     'num_epochs': 16,
     'max_grad_norm': 0.5,
@@ -20,8 +20,8 @@ LunarLander_v3_dict = {
 
     'actor_dims': [256, 256, 256],
     'critic_dims': [256, 256, 256],
-    'actor_lr': 2e-4,
-    'critic_lr': 2e-4,
+    'actor_lr': 2e-5,
+    'critic_lr': 2e-5,
 
     'eval_interval': 10,
     'save_interval': 1000,

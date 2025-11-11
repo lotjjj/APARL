@@ -36,7 +36,7 @@ class BasicConfig:
     # Model
     policy: str = 'MlpPolicy'
     learning_rate: float = 3e-4
-    max_train_epochs: int = 1_000_000
+    max_train_steps: int = 100_000_000
     max_grad_norm: float = 2
 
     # Device
@@ -74,7 +74,7 @@ class BasicConfig:
         if self.num_envs <= 0: errors.append("num_envs must be > 0")
         if self.batch_size <= 0: errors.append("batch_size must be > 0")
         if self.horizon_len <= 0: errors.append("horizon_len must be > 0")
-        if self.max_train_epochs <= 0: errors.append("max_train_epochs must be > 0")
+        if self.max_train_steps <= 0: errors.append("max_train_steps must be > 0")
         if self.num_envs * self.horizon_len < self.batch_size * 2:
             errors.append("num_envs * horizon_len should >= batch_size * 2")
 

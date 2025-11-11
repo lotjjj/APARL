@@ -67,8 +67,8 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
     save_config(cfg)
 
     # train
-    start_epoch = agent.epochs
-    if start_epoch >= cfg.max_train_epochs:
+    start_steps = agent.steps
+    if start_steps >= cfg.max_train_steps:
         print(f'Training has already been completed, no need to train again')
         return
 
@@ -88,8 +88,9 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
 
     agent.last_observation =  observation.detach()
 
-    with tqdm(total=cfg.max_train_epochs, desc='Training ') as pbar:
-        pbar.update(start_epoch)
+    with tqdm(total=cfg.max_train_steps, desc='Training ') as pbar:
+        onestep = cfg.horizon_len*cfg.num_envs
+        pbar.update(start_steps)
         while pbar.n < pbar.total:
 
             buffer_items = agent.explore(envs) # on_policy: torch.Tensor, off_policy: ndarray
@@ -100,14 +101,14 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
                 buffer.update_buffer_horizon(buffer_items) # ReplayBuffer: np.ndarray
 
             agent.update(buffer)
-            pbar.update(cfg.num_epochs)
+            pbar.update(onestep)
 
-            idx = pbar.n-start_epoch
+            idx = pbar.n-start_steps
 
-            if idx % (cfg.eval_interval*cfg.num_epochs) == 0:
+            if idx % (cfg.eval_interval*onestep) == 0:
                 evaluate_agent(agent, eval_env, cfg.eval_num_episodes, cfg.eval_seed)
 
-            if idx % (cfg.save_interval*cfg.num_epochs) == 0:
+            if idx % (cfg.save_interval*onestep) == 0:
                 agent.save_model()
 
     eval_env.close()
@@ -137,11 +138,11 @@ def evaluate_agent(agent, env,  test_num, eval_seed):
                     break
             episode_reward[episode] = total_reward
             episode_steps[episode] = steps
-        logger.add_scalar('eval/mean_reward', episode_reward.mean(), agent.epochs)
-        logger.add_scalar('eval/std_reward', episode_reward.std(), agent.epochs)
-        logger.add_scalar('eval/max_reward', episode_reward.max(), agent.epochs)
-        logger.add_scalar('eval/min_reward', episode_reward.min(), agent.epochs)
-        logger.add_scalar('eval/mean_steps', episode_steps.mean(), agent.epochs)
+        logger.add_scalar('eval/mean_reward', episode_reward.mean(), agent.steps)
+        logger.add_scalar('eval/std_reward', episode_reward.std(), agent.steps)
+        logger.add_scalar('eval/max_reward', episode_reward.max(), agent.steps)
+        logger.add_scalar('eval/min_reward', episode_reward.min(), agent.steps)
+        logger.add_scalar('eval/mean_steps', episode_steps.mean(), agent.steps)
 
 
 

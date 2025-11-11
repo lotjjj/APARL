@@ -94,7 +94,7 @@ class AgentPPO(AgentAC):
             values_target = advantages + values
 
             rewards_avg = rewards.mean()
-            self.logger.add_scalar('reward/reward_avg', rewards_avg.cpu().item(), self.epochs)
+            self.logger.add_scalar('reward/reward_avg', rewards_avg.cpu().item(), self.steps)
 
             del rewards, undone, values
 
@@ -102,7 +102,6 @@ class AgentPPO(AgentAC):
         actor_losses = torch.zeros(self.config.num_epochs)
         entropy_losses = torch.zeros(self.config.num_epochs)
         for _ in range(self.config.num_epochs):
-            self.epochs += 1
             ids0, ids1 = self.shuffle_idx()
             for start in range(0, self.config.horizon_len * self.config.num_envs, self.config.batch_size):
                 end = start + self.config.batch_size
@@ -142,10 +141,10 @@ class AgentPPO(AgentAC):
                 critic_losses[_] += critic_loss
                 entropy_losses[_] += entropy_loss
 
-        self.logger.add_scalar('loss/actor_loss', actor_losses.mean().cpu().item(), self.epochs)
-        self.logger.add_scalar('loss/critic_loss', critic_losses.mean().cpu().item(), self.epochs)
-        self.logger.add_scalar('loss/entropy_loss', entropy_losses.mean().cpu().item(), self.epochs)
-        self.logger.add_scalar('loss/actor_entropy_loss', (actor_losses + entropy_losses).mean().cpu().item(), self.epochs)
+        self.logger.add_scalar('loss/actor_loss', actor_losses.mean().cpu().item(), self.steps)
+        self.logger.add_scalar('loss/critic_loss', critic_losses.mean().cpu().item(), self.steps)
+        self.logger.add_scalar('loss/entropy_loss', entropy_losses.mean().cpu().item(), self.steps)
+        self.logger.add_scalar('loss/actor_entropy_loss', (actor_losses + entropy_losses).mean().cpu().item(), self.steps)
 
     def get_objectives(self):
         pass
@@ -163,7 +162,7 @@ class AgentPPO(AgentAC):
             'critic': self.critic.state_dict(),
             'actor_optimizer': self.actor_optimizer.state_dict(),
             'critic_optimizer': self.critic_optimizer.state_dict(),
-            'epochs': self.epochs,
+            'steps': self.steps,
         }
         return check_point
 
