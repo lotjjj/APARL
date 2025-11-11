@@ -88,34 +88,35 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
 
     agent.last_observation =  observation.detach()
 
-    with tqdm(total=cfg.max_train_steps, desc='Training ') as pbar:
-        onestep = cfg.horizon_len*cfg.num_envs
-        pbar.update(start_steps)
-        while pbar.n < pbar.total:
+    pbar = agent.logger.pbar
+    onestep = cfg.horizon_len*cfg.num_envs
+    pbar.update(start_steps)
+    while pbar.n < pbar.total:
 
-            buffer_items = agent.explore(envs) # on_policy: torch.Tensor, off_policy: ndarray
+        buffer_items = agent.explore(envs) # on_policy: torch.Tensor, off_policy: ndarray
 
-            if cfg.is_on_policy:
-                buffer = buffer_items # buffer: Tuple[torch.Tensor, ...]
-            else:
-                buffer.update_buffer_horizon(buffer_items) # ReplayBuffer: np.ndarray
+        if cfg.is_on_policy:
+            buffer = buffer_items # buffer: Tuple[torch.Tensor, ...]
+        else:
+            buffer.update_buffer_horizon(buffer_items) # ReplayBuffer: np.ndarray
 
-            agent.update(buffer)
-            pbar.update(onestep)
-            agent.steps += onestep
+        agent.update(buffer)
+        pbar.update(onestep)
+        agent.steps += onestep
 
-            idx = pbar.n-start_steps
+        idx = pbar.n-start_steps
 
-            if idx % (cfg.eval_interval*onestep) == 0:
-                evaluate_agent(agent, eval_env, cfg.eval_num_episodes, cfg.eval_seed)
+        if idx % (cfg.eval_interval*onestep) == 0:
+            # evaluate_agent(agent, eval_env, cfg.eval_num_episodes, cfg.eval_seed)
+            pass
 
-            if idx % (cfg.save_interval*onestep) == 0:
-                agent.save_model()
+        if idx % (cfg.save_interval*onestep) == 0:
+            agent.save_model()
 
     eval_env.close()
     envs.close()
     agent.save_model()
-    pbar.close()
+    agent.logger.close()
     tqdm.write('Training finished')
 
 def evaluate_agent(agent, env,  test_num, eval_seed):

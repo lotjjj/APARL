@@ -70,7 +70,7 @@ class AgentPPO(AgentAC):
             # compensation
             # ElegantRL -> https://github.com/AI4Finance-Foundation/ElegantRL
             # No clue why do this
-            # rewards[truncations] +=  self.critic(observations[truncations]).detach()
+            rewards[truncations] +=  self.critic(observations[truncations]).detach()
             undone[truncations] = False
         # masks to stop the flow of the advantage
         masks = undone * self.config.gamma
@@ -114,9 +114,12 @@ class AgentPPO(AgentAC):
         critic_losses = torch.zeros(self.config.num_epochs)
         actor_losses = torch.zeros(self.config.num_epochs)
         entropy_losses = torch.zeros(self.config.num_epochs)
+
         for _ in range(self.config.num_epochs):
             ids0, ids1 = self.shuffle_idx()
+
             for start in range(0, self.config.horizon_len * self.config.num_envs, self.config.batch_size):
+
                 end = start + self.config.batch_size
                 id_horizon = ids0[start:end]
                 id_env = ids1[start:end]
@@ -135,8 +138,12 @@ class AgentPPO(AgentAC):
 
                 ratio = (new_log_prob_batch - log_probs_batch).exp()
 
+                self.logger.pbar.set_postfix(ratio=ratio.abs().max().cpu().item())
+
                 surr1 = ratio * advantages_batch
-                surr2 = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
+                applied_ratio = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio)
+                surr2 = applied_ratio * advantages_batch
+
                 actor_loss = -torch.min(surr1, surr2).mean()
                 entropy_loss = - self.config.entropy_coef * entropy_batch.mean()
 
@@ -173,8 +180,7 @@ class AgentPPO(AgentAC):
         check_point = {
             'actor': self.actor.state_dict(),
             'critic': self.critic.state_dict(),
-            'actor_optimizer': self.actor_optimizer.state_dict(),
-            'critic_optimizer': self.critic_optimizer.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
             'steps': self.steps,
         }
         return check_point
@@ -184,8 +190,7 @@ class AgentPPO(AgentAC):
             check_point = super().load_model(path)
             self.actor.load_state_dict(check_point['actor'])
             self.critic.load_state_dict(check_point['critic'])
-            self.actor_optimizer.load_state_dict(check_point['actor_optimizer'])
-            self.critic_optimizer.load_state_dict(check_point['critic_optimizer'])
+            self.optimizer.load_state_dict(check_point['optimizer'])
             print(f'load model from {path}')
         except Exception as e:
             print(f'load model error: {e}')
