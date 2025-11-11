@@ -107,7 +107,7 @@ class PPOConfig(BasicConfig):
     actor_dims: List[int] = field(default_factory=lambda: [256, 256])
     critic_dims: List[int] = field(default_factory=lambda: [256, 256])
     actor_lr: float = 2e-5
-    critic_lr: float = 3e-4
+    critic_lr: float = 3e-5
 
     def __post_init__(self):
         super().__post_init__()

@@ -121,6 +121,7 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
 def evaluate_agent(agent, env,  test_num, eval_seed):
     # Performance: with no grad
     logger = agent.logger
+    agent.eval_mode()
     with torch.no_grad():
         episode_reward = np.empty(test_num)
         episode_steps = np.zeros(test_num)
@@ -144,6 +145,7 @@ def evaluate_agent(agent, env,  test_num, eval_seed):
         logger.add_scalar('eval/max_reward', episode_reward.max(), agent.steps)
         logger.add_scalar('eval/min_reward', episode_reward.min(), agent.steps)
         logger.add_scalar('eval/mean_steps', episode_steps.mean(), agent.steps)
+        agent.train_mode()
 
 
 

@@ -105,15 +105,17 @@ class AgentPPO(AgentAC):
             ids0, ids1 = self.shuffle_idx()
             for start in range(0, self.config.horizon_len * self.config.num_envs, self.config.batch_size):
                 end = start + self.config.batch_size
+                id_horizon = ids0[start:end]
+                id_env = ids1[start:end]
 
-                observations_batch = observations[ids0[start:end],ids1[start:end]]
-                actions_batch = actions[ids0[start:end],ids1[start:end]]
-                # unmasks_batch = unmasks[ids0[start:end],ids1[start:end]]
-                log_probs_batch = log_probs[ids0[start:end],ids1[start:end]]
+                observations_batch = observations[id_horizon, id_env]
+                actions_batch = actions[id_horizon, id_env]
+                # unmasks_batch = unmasks[id_horizon, id_env]
+                log_probs_batch = log_probs[id_horizon, id_env]
 
-                advantages_batch = advantages[ids0[start:end],ids1[start:end]]
+                advantages_batch = advantages[id_horizon, id_env]
                 advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-8)
-                values_target_batch = values_target[ids0[start:end],ids1[start:end]]
+                values_target_batch = values_target[id_horizon, id_env]
 
                 values_batch = self.critic(observations_batch)
 

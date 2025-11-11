@@ -53,18 +53,18 @@ class AgentBase(ABC):
         tqdm.write(f'\nSave model to {path}')
 
     def load_model(self, path):
-        try:
-            check_point = torch.load(path)
-            self.steps = check_point['steps']
-            return check_point
-        except Exception as e:
-            print(f'No such model')
+        check_point = torch.load(path)
+        self.steps = check_point['steps']
+        return check_point
 
     def load_model_from_steps(self, steps):
         path = self.config.save_dir / f'{self.config.algorithm}_steps_{steps}.pth'
         return self.load_model(path)
 
-    def eval_model(self, env):
+    def eval_mode(self):
+        pass
+
+    def train_mode(self):
         pass
 
 
@@ -89,7 +89,18 @@ class AgentBase(ABC):
 class AgentAC(AgentBase, ABC):
     def __init__(self, config):
         super(AgentAC, self).__init__(config)
-        pass
+        self.actor = None
+        self.critic = None
+        self.actor_optimizer = None
+        self.critic_optimizer = None
+
+    def eval_mode(self):
+        self.actor.eval()
+        self.critic.eval()
+
+    def train_mode(self):
+        self.actor.train()
+        self.critic.train()
 
     def build_temp_buffer(self) -> Tuple[torch.Tensor, ...]:
         observations = torch.empty((self.config.horizon_len, self.config.num_envs, self.config.observation_dim), dtype=torch.float32)
