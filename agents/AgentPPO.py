@@ -11,9 +11,7 @@ class AgentPPO(AgentAC):
         self.last_observation = None
 
         self.actor = ActorPPO(self.config.observation_dim, self.config.action_dim, self.config.actor_dims, self.config.is_discrete).to(self.device)
-        self.critic = CriticPPO(self.config.observation_dim, self.config.action_dim, self.config.critic_dims).to(self.device)
-        self._init_weights(self.actor)
-        self._init_weights(self.critic)
+        self.critic = CriticPPO(self.config.observation_dim, self.config.critic_dims).to(self.device)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.config.critic_lr)
@@ -59,12 +57,12 @@ class AgentPPO(AgentAC):
             # compensation
             # ElegantRL -> https://github.com/AI4Finance-Foundation/ElegantRL
             # No clue why do this
-            rewards[truncations] +=  self.critic(observations[truncations]).detach()
+            # rewards[truncations] +=  self.critic(observations[truncations]).detach()
             undone[truncations] = False
         # masks to stop the flow of the advantage
         masks = undone * self.config.gamma
         # all state values
-        values = self.critic(observations)
+        values = self.critic(observations).detach()
         # all GAE advantages
         advantages = torch.empty_like(values)
 
@@ -180,29 +178,41 @@ class AgentPPO(AgentAC):
 
 from modules.Extractor import FlattenExtractor
 from modules.Head import ContinuousPolicyHead, DiscretePolicyHead
+from typing import OrderedDict
+
+class CriticPPO(nn.Module):
+    def __init__(self, observation_dim, dims):
+        super().__init__()
+        dims = [ observation_dim, *dims]
+        self.feature_extractor = FlattenExtractor(dims)
+        self.value_head = nn.Linear(dims[-1], 1)
+
+    def forward(self, observation: torch.Tensor):
+        feature = self.feature_extractor(observation)
+        value = self.value_head(feature)
+        return value.squeeze(-1)
 
 class ActorPPO(nn.Module):
     def __init__(self, observation_dim, action_dim, dims, is_discrete):
         super().__init__()
-
-        dims = [ observation_dim, *dims]
-
-        self.feature_extractor = FlattenExtractor(dims)
-
         self.is_discrete = is_discrete
-        if is_discrete:
-            self.policy_head = DiscretePolicyHead([dims[-1], action_dim])
-        else:
-            self.policy_head = ContinuousPolicyHead([dims[-1], action_dim])
+        dims = [observation_dim, *dims]
 
+        self.expert = nn.Sequential(
+            OrderedDict(
+                {
+                    'feature_extractor': FlattenExtractor(dims),
+                    'policy_head': DiscretePolicyHead([dims[-1], action_dim]) if is_discrete
+                    else ContinuousPolicyHead([dims[-1], action_dim]),
+                }
+            )
+        )
 
     def forward(self, observation: torch.Tensor):
-        feature = self.feature_extractor(observation)
         if self.is_discrete:
-            logits = self.policy_head(feature)
-            return logits
+            return self.expert(observation)
         else:
-            mu, log_std = self.policy_head(feature)
+            mu, log_std = self.expert(observation)
             std = torch.exp(torch.clamp(log_std, min=-20, max=1))
             return self.convert_action(mu), std
 
@@ -215,7 +225,7 @@ class ActorPPO(nn.Module):
             else:
                 action = dist.sample()
             log_prob = dist.log_prob(action)
-            return action, log_prob
+            return action.detach(), log_prob.detach()
         else:
             mu, std = self.forward(observation)
             dist = torch.distributions.Normal(mu, std)
@@ -224,7 +234,7 @@ class ActorPPO(nn.Module):
             else:
                 action = dist.sample()
             log_prob = dist.log_prob(action)
-            return action, log_prob.sum(-1)
+            return action.detach(), log_prob.sum(-1).detach()
 
     def get_log_prob_entropy(self, observation: torch.Tensor, action: torch.Tensor):
         if self.is_discrete:
@@ -242,15 +252,3 @@ class ActorPPO(nn.Module):
     def convert_action(action):
         return torch.tanh(action)
 
-
-class CriticPPO(nn.Module):
-    def __init__(self, observation_dim, action_dim, dims):
-        super().__init__()
-        dims = [ observation_dim, *dims]
-        self.feature_extractor = FlattenExtractor(dims)
-        self.value_head = nn.Linear(dims[-1], 1)
-
-    def forward(self, observation: torch.Tensor):
-        feature = self.feature_extractor(observation)
-        value = self.value_head(feature)
-        return value.squeeze(-1)

@@ -4,27 +4,28 @@ LunarLander_v3_dict = {
     'is_discrete': True,
     'device': 'cpu',
 
-    'horizon_len': 800,
+    'horizon_len': 2400,
     'num_envs': 6,
-    'batch_size': 256,
-    'entropy_coef': 0.001,
-    'clip_ratio': 0.1,
+    'batch_size': 128,
+    'entropy_coef': 0.01,
+    'clip_ratio': 0.2,
     'lambda_gae_adv': 0.95,
-    'num_epochs': 16,
+    'num_epochs': 10,
     'max_grad_norm': 1.0,
 
-    'max_episode_steps': 400,
+    'max_episode_steps': 800,
     'eval_max_episode_steps': 400,
     'eval_num_episodes': 1,
     'eval_render_mode': None,
+    'eval_seed': 42,
 
-    'actor_dims': [64, 64],
-    'critic_dims': [64, 64],
+    'actor_dims': [64, 128, 64],
+    'critic_dims': [64, 128, 64],
     'actor_lr': 3e-4,
     'critic_lr': 3e-4,
 
-    'eval_interval': 10,
-    'save_interval': 1000,
+    'eval_interval': 5,
+    'save_interval': 500,
 }
 
 MountainCarContinuous_v0_dict = {

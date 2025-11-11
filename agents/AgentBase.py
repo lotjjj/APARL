@@ -72,17 +72,10 @@ class AgentBase(ABC):
     def _check_point(self):
         return {}
 
-    @staticmethod
-    def _init_weights(model):
-        for m in model.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
-                nn.init.constant_(m.bias, 0)
-
     def optimizer_backward(self, optimizer: torch.optim.Optimizer , loss: torch.Tensor):
         optimizer.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_norm_(optimizer.param_groups[0]['params'], self.config.max_grad_norm)
+        # nn.utils.clip_grad_norm_(optimizer.param_groups[0]['params'], self.config.max_grad_norm)
         optimizer.step()
 
 
