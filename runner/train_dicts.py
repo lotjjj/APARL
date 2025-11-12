@@ -4,13 +4,13 @@ LunarLander_v3_dict = {
     'is_discrete': True,
     'device': 'cpu',
 
-    'horizon_len': 1024,
+    'horizon_len': 2048,
     'num_envs': 3,
     'batch_size': 64,
-    'entropy_coef': 0.01,
+    'entropy_coef': 0.05,
     'clip_ratio': 0.2,
     'lambda_gae_adv': 0.95,
-    'num_epochs': 10,
+    'num_epochs': 8,
     'max_grad_norm': 0.5,
 
     'max_episode_steps': 300,
