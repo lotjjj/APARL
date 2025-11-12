@@ -27,7 +27,7 @@ ApaRL/
 ### 1. Requirements
 
 ```bash
-pip install torch gymnasium numpy tqdm
+pip3 install torch numpy tqdm swig gymnasium[box2d] swanlab 
 ```
 
 ### 2. Basic Usage
