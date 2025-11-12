@@ -18,7 +18,8 @@ class ContinuousPolicyHead(nn.Module):
     def _init_weights(self):
         nn.init.normal_(self.log_std.weight, 0, 0.1)
         nn.init.constant_(self.log_std.bias, -0.1)
-        nn.init.constant_(self.net.bias, 0)
+        nn.init.normal_(self.net[-1].weight, 0, 0.5)
+        nn.init.constant_(self.net[-1].bias, 0)
 
 class DiscretePolicyHead(nn.Module):
     def __init__(self, dims, activation=nn.ReLU):

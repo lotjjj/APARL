@@ -35,6 +35,7 @@ class BasicConfig:
 
     # Model
     policy: str = 'MlpPolicy'
+    activation: str = 'relu'
     learning_rate: float = 3e-4
     max_train_steps: int = 100_000_000
     max_grad_norm: float = 2

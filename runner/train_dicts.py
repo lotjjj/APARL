@@ -33,6 +33,7 @@ BipedalWalker_v3_dict = {
     'env_name': 'BipedalWalker-v3',
     'is_discrete': False,
     'device': 'cpu',
+    'activation': 'leaky_relu',
 
     'horizon_len': 1024,
     'num_envs': 8,

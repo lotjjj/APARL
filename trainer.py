@@ -7,7 +7,7 @@ warnings.filterwarnings("ignore")
 
 if __name__ == '__main__':
     # safe wrapping
-    cfg = wrap_config_from_dict(PPOConfig(), train_dicts.LunarLander_v3_dict)
+    cfg = wrap_config_from_dict(PPOConfig(), train_dicts.BipedalWalker_v3_dict)
 
     # make train env
     envs = make_vec_env(cfg, wrappers=[])
