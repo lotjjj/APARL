@@ -1,6 +1,6 @@
-.gitignore
 results/
 tests/
 .idea/
 .vscode/
 swanlog/
+.gitignore

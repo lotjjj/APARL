@@ -1,5 +1,4 @@
-
-import train_dicts
+from runner import train_dicts
 from modules.config import PPOConfig, wrap_config_from_dict
 from runner.run import train_agent, make_vec_env, make_eval_env
 
