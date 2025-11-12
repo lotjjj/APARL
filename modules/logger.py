@@ -1,15 +1,24 @@
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import swanlab
-
+from modules.config import config_to_dict
 
 class Logger:
     def __init__(self, config):
 
         swanlab.init(
             project="LunarLander-Discrete",
-            experiment_name="PPO",
+            experiment_name="BasicAlgorithmTest",
+
+            description="Test our implementation",
+
+            tags=[
+                "https://github.com/lotjjj/APARL.git",
+            ],
+
+            config = config.hyper_params
         )
+        # hyperparams
 
         self.config = config
         swanlab.sync_tensorboard_torch()

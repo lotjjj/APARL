@@ -25,14 +25,13 @@ class BasicConfig:
 
     # Algorithm
     algorithm: str = None
+    is_on_policy: bool = None
     gamma: float = 0.99
     seed: int = 114514
-    num_epochs: int = 4
 
     # Data
     batch_size: int = 64
-    horizon_len: int = 600
-    buffer_size: int = 1_000_000
+    horizon_len: int = 1024
 
     # Model
     policy: str = 'MlpPolicy'
@@ -80,6 +79,19 @@ class BasicConfig:
         if errors:
             raise ValueError("Config validation failed:\n" + "\n".join(errors))
 
+    @property
+    def hyper_params(self):
+        return {
+            'algorithm': self.algorithm,
+            'is_on_policy': self.is_on_policy,
+            'num_envs': self.num_envs,
+            'gamma': self.gamma,
+            'seed': self.seed,
+            'batch_size': self.batch_size,
+            'horizon_len': self.horizon_len,
+            'max_train_steps': self.max_train_steps,
+        }
+
     def set_env_dim(self, observation_dim: int, action_dim: int):
         self.observation_dim = observation_dim
         self.action_dim = action_dim
@@ -101,7 +113,7 @@ class PPOConfig(BasicConfig):
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
     num_epochs: int = 6
-    batch_size: int = 511
+    batch_size: int = 512
 
     actor_dims: List[int] = field(default_factory=lambda: [256, 256])
     critic_dims: List[int] = field(default_factory=lambda: [256, 256])
@@ -110,6 +122,25 @@ class PPOConfig(BasicConfig):
 
     def __post_init__(self):
         super().__post_init__()
+
+    @property
+    def hyper_params(self):
+        # return a dict
+        orin = super().hyper_params
+
+        orin.update({
+            'num_epochs': self.num_epochs,
+            'actor_lr': self.actor_lr,
+            'critic_lr': self.critic_lr,
+            'actor_dims': self.actor_dims,
+            'critic_dims': self.critic_dims,
+            'clip_ratio': self.clip_ratio,
+            'entropy_coef': self.entropy_coef,
+            'lambda_gae_adv': self.lambda_gae_adv,
+            'value_coef': self.value_coef,
+        })
+
+        return orin
 
     def validate_config(self):
         super().validate_config()
@@ -138,15 +169,7 @@ class DQNConfig(BasicConfig):
         super().__post_init__()
 
 # Qwen3 Contributions
-
-def save_config(config: BasicConfig, path: Union[str, Path] = None) -> None:
-
-    if path:
-        path = Path(path)
-    else:
-        path = config.config_dir / f'{config.algorithm}_{config.daytime}.yaml'
-
-    # 准备可序列化的字典
+def config_to_dict(config: BasicConfig):
     data = {}
     for field in dataclasses.fields(config):
         value = getattr(config, field.name)
@@ -171,6 +194,17 @@ def save_config(config: BasicConfig, path: Union[str, Path] = None) -> None:
     data['__config_class__'] = (
         f"{config.__class__.__module__}.{config.__class__.__name__}"
     )
+    return data
+
+def save_config(config: BasicConfig, path: Union[str, Path] = None) -> None:
+
+    if path:
+        path = Path(path)
+    else:
+        path = config.config_dir / f'{config.algorithm}_{config.daytime}.yaml'
+
+    # 准备可序列化的字典
+    data = config_to_dict(config)
 
     # 保存到YAML
     with path.open('w') as f:
