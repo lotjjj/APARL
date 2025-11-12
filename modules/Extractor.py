@@ -4,7 +4,7 @@ from agents.AgentBase import build_mlp
 class FlattenExtractor(nn.Module):
     def __init__(self, dims, activation=nn.ReLU, end_with_activation=True):
         super(FlattenExtractor, self).__init__()
-
+        self.activation = activation
         self.net = build_mlp(
             dims=dims, activation=activation, end_with_activation=end_with_activation
         )
@@ -15,9 +15,16 @@ class FlattenExtractor(nn.Module):
         return self.net(x)
 
     def _init_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
+        if isinstance(self.activation, nn.Tanh):
+            for m in self.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='tanh')
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+        else:
+            for m in self.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
 

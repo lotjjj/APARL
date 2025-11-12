@@ -8,11 +8,17 @@ class ContinuousPolicyHead(nn.Module):
 
         self.net = build_mlp(dims=dims, activation=activation, end_with_activation=False)
         self.log_std = nn.Linear(dims[0], dims[-1])
+        self._init_weights()
 
     def forward(self, x):
         mu = self.net(x)
         log_std = self.log_std(x)
         return mu, log_std
+
+    def _init_weights(self):
+        nn.init.normal_(self.log_std.weight, 0, 0.1)
+        nn.init.constant_(self.log_std.bias, -0.1)
+        nn.init.constant_(self.net.bias, 0)
 
 class DiscretePolicyHead(nn.Module):
     def __init__(self, dims, activation=nn.ReLU):
