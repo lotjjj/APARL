@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Any, Dict, Union
 import logging
+import warnings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -75,8 +76,6 @@ class BasicConfig:
         if self.batch_size <= 0: errors.append("batch_size must be > 0")
         if self.horizon_len <= 0: errors.append("horizon_len must be > 0")
         if self.max_train_steps <= 0: errors.append("max_train_steps must be > 0")
-        if self.num_envs * self.horizon_len < self.batch_size * 2:
-            errors.append("num_envs * horizon_len should >= batch_size * 2")
 
         if errors:
             raise ValueError("Config validation failed:\n" + "\n".join(errors))
@@ -97,7 +96,7 @@ class BasicConfig:
 class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
     is_on_policy: bool = True
-    clip_ratio: float = 0.1
+    clip_ratio: float = 0.2
     entropy_coef: float = 0.01
     lambda_gae_adv: float = 0.95
     value_coef: float = 0.5
@@ -112,6 +111,20 @@ class PPOConfig(BasicConfig):
     def __post_init__(self):
         super().__post_init__()
 
+    def validate_config(self):
+        super().validate_config()
+
+        errors = []
+        if self.num_envs * self.horizon_len % self.batch_size != 0: errors.append(
+            f"Batch_size: {self.batch_size} is not a factor of num_envs*horizon_len: {self.num_envs}*{self.horizon_len}"
+        )
+
+        if errors:
+            raise ValueError("Config validation failed:\n" + "\n".join(errors))
+
+
+        if self.num_epochs>10 or self.num_epochs<3:
+            warnings.warn(f'num_epochs is not in the range of [3,10], which is a suggested range given by PPO paper')
 
 @dataclass
 class DQNConfig(BasicConfig):

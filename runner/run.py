@@ -107,8 +107,7 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
         idx = pbar.n-start_steps
 
         if idx % (cfg.eval_interval*onestep) == 0:
-            # evaluate_agent(agent, eval_env, cfg.eval_num_episodes, cfg.eval_seed)
-            pass
+            evaluate_agent(agent, eval_env, cfg.eval_num_episodes, cfg.eval_seed)
 
         if idx % (cfg.save_interval*onestep) == 0:
             agent.save_model()

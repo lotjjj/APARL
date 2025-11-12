@@ -75,7 +75,8 @@ class AgentBase(ABC):
     def optimizer_backward(self, optimizer: torch.optim.Optimizer , loss: torch.Tensor):
         optimizer.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_norm_(optimizer.param_groups[0]['params'], self.config.max_grad_norm)
+        for p_dict in optimizer.param_groups:
+            nn.utils.clip_grad_norm_(p_dict['params'], self.config.max_grad_norm)
         optimizer.step()
 
 

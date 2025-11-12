@@ -9,6 +9,15 @@ class FlattenExtractor(nn.Module):
             dims=dims, activation=activation, end_with_activation=end_with_activation
         )
 
+        self._init_weights()
+
     def forward(self, x):
         return self.net(x)
+
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
 

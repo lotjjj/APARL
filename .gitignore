@@ -3,3 +3,4 @@ results/
 tests/
 .idea/
 .vscode/
+runner/swanlog

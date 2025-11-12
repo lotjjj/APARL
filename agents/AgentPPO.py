@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 from agents.AgentBase import AgentAC
-
+import torch.nn.functional as F
 
 class AgentPPO(AgentAC):
     def __init__(self, config):
@@ -60,42 +60,54 @@ class AgentPPO(AgentAC):
             # Update last observation
             self.last_observation = torch.from_numpy(next_observation).to(self.device)
 
-        return observations, actions, log_probs, rewards, terminations, truncations
+        return observations, actions, log_probs, rewards, terminations.logical_not(), truncations.logical_not()
 
     def compute_gae_advantage(self, buffer: Tuple[torch.Tensor, ...]):
         observations, actions, log_probs, rewards, undone, unmasks = buffer
         truncations = torch.logical_not(unmasks)
+        # True if truncated, False if not
         # add V to the last truncated state as compensation
         if torch.any(truncations):
             # compensation
             # ElegantRL -> https://github.com/AI4Finance-Foundation/ElegantRL
-            # No clue why do this
-            rewards[truncations] +=  self.critic(observations[truncations]).detach()
-            undone[truncations] = False
+            # No clue why do this -> Actually, this *is* the standard way for truncated episodes.
+            # When an episode is truncated (e.g., by max_steps), we don't have a terminal state.
+            # We use the value estimate V(s_T) as an estimate for the discounted future reward G_T.
+            # So, the reward for the final state s_T is R_T + gamma * V(s_{T+1}) = R_T + gamma * V(s_T_truncated)
+            # The `undone[truncations] = False` line below ensures the masks stop the advantage calculation.
+            rewards[truncations] += self.critic(observations[truncations]).detach()
+            undone[truncations] = False  # This makes masks[truncations] = 0, stopping the advantage flow.
         # masks to stop the flow of the advantage
-        masks = undone * self.config.gamma
+        masks = undone * self.config.gamma  # If undone is False, mask is 0, stopping the advantage calculation.
         # all state values
         values = self.critic(observations).detach()
 
         # all GAE advantages
         advantages = torch.empty_like(values)
 
-        # s_t+1
-        next_state = self.last_observation.clone()
+        # s_t+1 (The next state *after* the last step of the collected trajectory)
+        next_state = self.last_observation.clone()  # This is the state after the final action of the horizon.
         # V(s_t+1)
-        next_value = self.critic(next_state).detach()
+        next_value = self.critic(next_state).detach()  # This is V(s_{t+1}), used as the bootstrap value for the *final* step of the trajectory.
 
-        # GAE advantage at time t
-        advantage = torch.zeros_like(next_value)
+        # GAE advantage at time t (Running advantage accumulator)
+        advantage = torch.zeros_like(next_value)  # Initialize the GAE accumulator for the *final* step of the trajectory.
 
-        for i in reversed(range(self.config.horizon_len-1,-1,-1)):
-            # if truncated, it is V(s_t) + r_t,
-            # if terminated, it is one-step reward
-            # else it is an estimation of Q(s_t,a_t)
-            next_value = rewards[i] + masks[i] * next_value
-            # GAE reverse
-            advantages[i] = advantage =  next_value - values[i] + masks[i] * self.config.lambda_gae_adv * advantage
+        # Iterate backwards from the last step of the trajectory (config.horizon_len - 1) down to 0
+        for i in reversed(range(self.config.horizon_len)):
+            # GAE_t = delta_t + gamma * lambda * GAE_t+1
+            # delta_t = R_{t+1} + gamma * V(s_{t+1}) - V(s_t)
+            # Note: rewards[i], values[i] correspond to state s_t and action a_t.
+            # masks[i] * next_value represents gamma * V(s_{t+1}) if the episode didn't terminate or truncate at t+1.
+            # The `next_value` variable holds V(s_{t+1}) from the previous iteration (or V(s_{T+1}) initially).
+            delta = rewards[i] + masks[i] * next_value - values[i]
+            # Update the running GAE accumulator for the *next* step (t+1) to be used in the *previous* step (t).
+            # advantage = GAE_{t+1} (from previous iteration)
+            advantages[i] = advantage = delta + masks[i] * self.config.lambda_gae_adv * advantage
+            # Update `next_value` for the *next* iteration (which will be the *previous* step in time).
+            # This sets next_value = V(s_t), which will be gamma-multiplied in the next iteration (for step t-1).
             next_value = values[i]
+
         return advantages, values
 
     def update(self, buffer: Tuple[torch.Tensor, ...]):
@@ -103,11 +115,10 @@ class AgentPPO(AgentAC):
         with torch.no_grad():
             observations, actions, log_probs, rewards, undone, unmasks = buffer
             advantages, values = self.compute_gae_advantage(buffer)
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
             values_target = advantages + values
 
-            rewards_avg = rewards.mean()
-            self.logger.add_scalar('reward/reward_avg', rewards_avg.cpu().item(), self.steps)
+            rewards_avg = rewards.mean(dim=0).mean()
+            self.logger.add_scalar('reward/one_step_reward_avg', rewards_avg.cpu().item(), self.steps)
 
             del rewards, undone, values
 
@@ -117,9 +128,7 @@ class AgentPPO(AgentAC):
 
         for _ in range(self.config.num_epochs):
             ids0, ids1 = self.shuffle_idx()
-
             for start in range(0, self.config.horizon_len * self.config.num_envs, self.config.batch_size):
-
                 end = start + self.config.batch_size
                 id_horizon = ids0[start:end]
                 id_env = ids1[start:end]
@@ -127,39 +136,41 @@ class AgentPPO(AgentAC):
                 observations_batch = observations[id_horizon, id_env]
                 actions_batch = actions[id_horizon, id_env]
                 # unmasks_batch = unmasks[id_horizon, id_env]
-                log_probs_batch = log_probs[id_horizon, id_env].detach()
+                log_probs_batch = log_probs[id_horizon, id_env]
 
                 advantages_batch = advantages[id_horizon, id_env]
+                advantages_batch = (advantages_batch - advantages_batch.mean()) / (advantages_batch.std() + 1e-8)
+
                 values_target_batch = values_target[id_horizon, id_env]
 
                 values_batch = self.critic(observations_batch)
 
                 new_log_prob_batch, entropy_batch = self.actor.get_log_prob_entropy(observations_batch, actions_batch)
 
-                ratio = (new_log_prob_batch - log_probs_batch).exp()
+                ratios = (new_log_prob_batch - log_probs_batch.detach()).exp()
 
-                self.logger.pbar.set_postfix(ratio=ratio.abs().max().cpu().item())
+                self.logger.pbar.set_postfix(ratio_max=ratios.max().cpu().item(), ratio_min=ratios.min().cpu().item())
 
-                surr1 = ratio * advantages_batch
-                applied_ratio = torch.clamp(ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio)
-                surr2 = applied_ratio * advantages_batch
+                surr1 = ratios * advantages_batch
+                surr2 = torch.clamp(ratios, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
 
+                # actor loss
                 actor_loss = -torch.min(surr1, surr2).mean()
-                entropy_loss = - self.config.entropy_coef * entropy_batch.mean()
+                entropy_loss = -torch.mean(entropy_batch)
 
                 # critic loss
-                critic_loss = nn.MSELoss()(values_batch, values_target_batch)
+                critic_loss = F.mse_loss(values_batch, values_target_batch)
 
                 # https://github.com/DLR-RM/stable-baselines3/blob/b018e4bc949503b990c3012c0e36c9384de770e6/stable_baselines3/ppo/ppo.py#L262
                 # approx KL divergence
                 # early stop
-                loss = self.config.value_coef * critic_loss +actor_loss + entropy_loss
+                loss = self.config.value_coef * critic_loss + actor_loss + self.config.entropy_coef *entropy_loss
 
                 self.optimizer_backward(self.optimizer, loss)
 
-                actor_losses[_] += actor_loss
-                critic_losses[_] += critic_loss
-                entropy_losses[_] += entropy_loss
+                actor_losses[_] += actor_loss.detach()
+                critic_losses[_] += critic_loss.detach()
+                entropy_losses[_] += entropy_loss.detach()
 
         self.logger.add_scalar('loss/actor_loss', actor_losses.mean().cpu().item(), self.steps)
         self.logger.add_scalar('loss/critic_loss', critic_losses.mean().cpu().item(), self.steps)
