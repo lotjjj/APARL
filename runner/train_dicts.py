@@ -1,26 +1,56 @@
-
+# Discrete
 LunarLander_v3_dict = {
     'env_name': 'LunarLander-v3',
     'is_discrete': True,
     'device': 'cpu',
 
-    'horizon_len': 2048,
-    'num_envs': 3,
-    'batch_size': 64,
-    'entropy_coef': 0.05,
+    'horizon_len': 1024,
+    'num_envs': 4,
+    'batch_size': 128,
+    'entropy_coef': 0.01,
     'clip_ratio': 0.2,
     'lambda_gae_adv': 0.95,
-    'num_epochs': 8,
+    'num_epochs': 10,
     'max_grad_norm': 0.5,
 
-    'max_episode_steps': 300,
-    'eval_max_episode_steps': 300,
+    'max_episode_steps': 200,
+    'eval_max_episode_steps': 200,
     'eval_num_episodes': 20,
     'eval_render_mode': None,
     'eval_seed': 114514,
 
     'actor_dims': [256, 256],
     'critic_dims': [256, 256],
+    'actor_lr': 3e-4,
+    'critic_lr': 3e-4,
+
+    'eval_interval': 10,
+    'save_interval': 200,
+}
+
+# Continuous
+BipedalWalker_v3_dict = {
+    'env_name': 'BipedalWalker-v3',
+    'is_discrete': False,
+    'device': 'cpu',
+
+    'horizon_len': 512,
+    'num_envs': 12,
+    'batch_size': 1024,
+    'entropy_coef': 0.01,
+    'clip_ratio': 0.2,
+    'lambda_gae_adv': 0.95,
+    'num_epochs': 15,
+    'max_grad_norm': 0.5,
+
+    'max_episode_steps': 200,
+    'eval_max_episode_steps': 200,
+    'eval_num_episodes': 10,
+    'eval_render_mode': None,
+    'eval_seed': 114514,
+
+    'actor_dims': [256, 256, 256],
+    'critic_dims': [256, 256, 256],
     'actor_lr': 3e-4,
     'critic_lr': 3e-4,
 
@@ -41,23 +71,6 @@ MountainCarContinuous_v0_dict = {
 
     'options': {"low": -1, "high": -0.5},
 }
-
-BipedalWalker_v3_dict = {
-    'env_name': 'BipedalWalker-v3',
-    'is_discrete': False,
-
-    'horizon_len': 600,
-    'num_envs': 3,
-    'batch_size': 123,
-    'entropy_coef': 0.001,
-
-    'max_episode_steps': 500,
-
-    'eval_max_episode_steps': 600,
-    'eval_num_episodes': 3,
-    'eval_render_mode': 'human',
-}
-
 
 
 

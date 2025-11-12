@@ -88,9 +88,11 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
 
     agent.last_observation =  observation.detach()
 
+    agent.logger.setup_pbar()
     pbar = agent.logger.pbar
     onestep = cfg.horizon_len*cfg.num_envs
     pbar.update(start_steps)
+
     while pbar.n < pbar.total:
 
         buffer_items = agent.explore(envs) # on_policy: torch.Tensor, off_policy: ndarray

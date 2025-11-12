@@ -1,14 +1,15 @@
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import swanlab
-from modules.config import config_to_dict
+from modules.config import  BasicConfig
+
 
 class Logger:
-    def __init__(self, config):
+    def __init__(self, config: BasicConfig):
 
         swanlab.init(
-            project="LunarLander-Discrete",
-            experiment_name="BasicAlgorithmTest",
+            project= f"{config.env_name}-{'Discrete' if config.is_discrete else 'Continuous'}",
+            experiment_name=f"BasicAlgorithmTest-{config.algorithm}",
 
             description="Test our implementation",
 
@@ -22,8 +23,8 @@ class Logger:
 
         self.config = config
         swanlab.sync_tensorboard_torch()
-        self.tensorboard = SummaryWriter(log_dir=self.config.log_dir, filename_suffix=self.config.algorithm)
-        self.pbar = tqdm(total=self.config.max_train_steps, desc='Training ')
+        self.tensorboard = SummaryWriter(log_dir=str(self.config.log_dir), filename_suffix=self.config.algorithm)
+        self.pbar = None
 
     def add_scalar(self, tag: str, value: float, step: int):
         self.tensorboard.add_scalar(tag, value, step)
@@ -32,3 +33,7 @@ class Logger:
         self.tensorboard.close()
         self.pbar.close()
 
+    def setup_pbar(self, total_steps: int = None):
+        if total_steps is None:
+            total_steps = self.config.max_train_steps
+        self.pbar = tqdm(total=total_steps, desc=f'Training, {self.config.algorithm} ')

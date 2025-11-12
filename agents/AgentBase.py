@@ -7,7 +7,6 @@ from tqdm import tqdm
 
 from modules.logger import Logger
 
-
 class AgentBase(ABC):
     def __init__(self, config):
         self.config = config
