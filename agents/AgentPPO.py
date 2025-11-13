@@ -225,16 +225,27 @@ class CriticPPO(nn.Module):
         value = self.value_head(feature)
         return value.squeeze(-1)
 
+from modules.CustomModule import TopKMoE
 class ActorPPO(nn.Module):
-    def __init__(self, observation_dim, action_dim, dims, is_discrete):
+    def __init__(self, observation_dim, action_dim, dims, is_discrete, if_moe = True):
         super().__init__()
         self.is_discrete = is_discrete
         dims = [observation_dim, *dims]
 
-        self.expert = nn.Sequential(
+        self.net = nn.Sequential(
             OrderedDict(
                 {
                     'feature_extractor': FlattenExtractor(dims),
+                    'policy_head': DiscretePolicyHead([dims[-1], action_dim]) if is_discrete
+                    else ContinuousPolicyHead([dims[-1], action_dim]),
+                }
+            )
+        ) if not if_moe else \
+        nn.Sequential(
+            OrderedDict(
+                {
+                    'feature_extractor': FlattenExtractor(dims),
+                    'experts': TopKMoE([dims[-1],dims[-1]], 4, 4),
                     'policy_head': DiscretePolicyHead([dims[-1], action_dim]) if is_discrete
                     else ContinuousPolicyHead([dims[-1], action_dim]),
                 }
@@ -243,9 +254,9 @@ class ActorPPO(nn.Module):
 
     def forward(self, observation: torch.Tensor):
         if self.is_discrete:
-            return self.expert(observation)
+            return self.net(observation)
         else:
-            mu, log_std = self.expert(observation)
+            mu, log_std = self.net(observation)
             std = torch.exp(torch.clamp(log_std, min=-20, max=1))
             return self.convert_action(mu), std
 

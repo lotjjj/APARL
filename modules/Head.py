@@ -1,6 +1,6 @@
 
 import torch.nn as nn
-from agents.AgentBase import build_mlp
+from modules.utils import build_mlp
 
 class ContinuousPolicyHead(nn.Module):
     def __init__(self, dims, activation=nn.ReLU):

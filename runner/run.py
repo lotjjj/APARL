@@ -42,17 +42,14 @@ def build_logger(cfg):
 
 def build_agent(cfg):
     agent = None
-    try:
-        alg = cfg.algorithm.lower()
-        if alg== 'ppo':
-            from agents.AgentPPO import AgentPPO
-            agent =  AgentPPO(cfg)
-        elif alg == 'dqn':
-            from agents.AgentDQN import AgentDQN
-        else:
-            raise ValueError(f'Unsupported algorithm: {cfg.algorithm}')
-    except Exception as e:
-        print(f'Error: {e}')
+    alg = cfg.algorithm.lower()
+    if alg== 'ppo':
+        from agents.AgentPPO import AgentPPO
+        agent =  AgentPPO(cfg)
+    elif alg == 'dqn':
+        from agents.AgentDQN import AgentDQN
+    else:
+        raise ValueError(f'Unsupported algorithm: {cfg.algorithm}')
     return agent
 
 def train_agent(envs, eval_env, cfg, model_path: Path =None):

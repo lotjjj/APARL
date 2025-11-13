@@ -48,7 +48,7 @@ BipedalWalker_v3_dict = {
 
     'max_episode_steps': 999,
     'eval_max_episode_steps': 999,
-    'eval_num_episodes': 10,
+    'eval_num_episodes': 5,
     'eval_render_mode': None,
     'eval_seed': 114514,
 
