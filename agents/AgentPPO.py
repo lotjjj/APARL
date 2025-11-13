@@ -1,4 +1,6 @@
 from typing import Tuple
+
+import numpy as np
 import torch
 from torch import nn
 
@@ -122,9 +124,10 @@ class AgentPPO(AgentAC):
 
             del rewards, undone, values
 
-        critic_losses = torch.zeros(self.config.num_epochs)
-        actor_losses = torch.zeros(self.config.num_epochs)
-        entropy_losses = torch.zeros(self.config.num_epochs)
+        critic_losses = []
+        actor_losses = []
+        entropy_losses = []
+        clip_losses = []
 
         for _ in range(self.config.num_epochs):
             ids0, ids1 = self.shuffle_idx()
@@ -149,33 +152,33 @@ class AgentPPO(AgentAC):
 
                 ratios = (new_log_prob_batch - log_probs_batch.detach()).exp()
 
-                self.logger.pbar.set_postfix(ratio_max=ratios.max().cpu().item(), ratio_min=ratios.min().cpu().item())
-
                 surr1 = ratios * advantages_batch
                 surr2 = torch.clamp(ratios, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio) * advantages_batch
 
                 # actor loss
-                actor_loss = -torch.min(surr1, surr2).mean()
-                entropy_loss = -torch.mean(entropy_batch)
+                clip_loss = -torch.min(surr1, surr2).mean()
+                entropy_loss = - self.config.entropy_coef * torch.mean(entropy_batch)
+                actor_loss = clip_loss + entropy_loss
 
                 # critic loss
-                critic_loss = F.mse_loss(values_batch, values_target_batch)
+                critic_loss = self.config.value_coef * F.mse_loss(values_batch, values_target_batch)
 
                 # https://github.com/DLR-RM/stable-baselines3/blob/b018e4bc949503b990c3012c0e36c9384de770e6/stable_baselines3/ppo/ppo.py#L262
                 # approx KL divergence
                 # early stop
-                loss = self.config.value_coef * critic_loss + actor_loss + self.config.entropy_coef *entropy_loss
+                loss =  critic_loss + actor_loss
 
                 self.optimizer_backward(self.optimizer, loss)
 
-                actor_losses[_] += actor_loss.detach()
-                critic_losses[_] += critic_loss.detach()
-                entropy_losses[_] += entropy_loss.detach()
+                actor_losses.append(actor_loss.detach().cpu().item())
+                clip_losses.append(clip_loss.detach().cpu().item())
+                entropy_losses.append(entropy_loss.detach().cpu().item())
+                critic_losses.append(critic_loss.detach().cpu().item())
 
-        self.logger.add_scalar('loss/actor_loss', actor_losses.mean().cpu().item(), self.steps)
-        self.logger.add_scalar('loss/critic_loss', critic_losses.mean().cpu().item(), self.steps)
-        self.logger.add_scalar('loss/entropy_loss', entropy_losses.mean().cpu().item(), self.steps)
-        self.logger.add_scalar('loss/actor_entropy_loss', (actor_losses + entropy_losses).mean().cpu().item(), self.steps)
+        self.logger.add_scalar('loss/actor_loss', np.mean(actor_losses), self.steps)
+        self.logger.add_scalar('loss/clip_loss', np.mean(clip_losses), self.steps)
+        self.logger.add_scalar('loss/entropy_loss', np.mean(entropy_losses), self.steps)
+        self.logger.add_scalar('loss/critic_loss', np.mean(critic_losses), self.steps)
 
     def get_objectives(self):
         pass

@@ -96,19 +96,19 @@ class AgentAC(AgentBase, ABC):
         self.critic.train()
 
     def build_temp_buffer(self) -> Tuple[torch.Tensor, ...]:
-        observations = torch.empty((self.config.horizon_len, self.config.num_envs, self.config.observation_dim), dtype=torch.float32)
+        observations = torch.empty((self.config.horizon_len, self.config.num_envs, self.config.observation_dim), dtype=torch.float32,  device=self.device)
 
         actions =  torch.empty(
             (self.config.horizon_len, self.config.num_envs, self.config.action_dim),
-            dtype=torch.float32)\
+            dtype=torch.float32, device=self.device)\
             if not self.config.is_discrete \
             else torch.empty((self.config.horizon_len, self.config.num_envs,),
-                             dtype=torch.int32)
+                             dtype=torch.int32,  device=self.device)
 
-        log_probs = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32)
-        rewards = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32)
-        terminations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool)
-        truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool)
+        log_probs = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32, device=self.device)
+        rewards = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.float32,  device=self.device)
+        terminations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool,  device=self.device)
+        truncations = torch.empty((self.config.horizon_len, self.config.num_envs, ), dtype=torch.bool,  device=self.device)
         return observations, actions, log_probs, rewards, terminations, truncations
 
 class AgentQ(AgentBase, ABC):

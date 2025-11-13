@@ -4,12 +4,62 @@ import importlib
 import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Any, Dict, Union
+from typing import List, Optional, Any, Dict, Union, Type, get_origin, get_args
 import logging
 import warnings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _is_path_field(field_type) -> bool:
+    """判断字段是否为 Path 类型"""
+    return field_type is Path or (hasattr(field_type, '__origin__') and field_type.__origin__ is Path)
+
+
+def _is_dict_field(field_type) -> bool:
+    """判断字段是否为 dict 类型"""
+    origin = get_origin(field_type)
+    if origin is dict:
+        return True
+    if isinstance(field_type, type) and issubclass(field_type, dict):
+        return True
+    return False
+
+
+def _serialize_value(value: Any, field_type=None) -> Any:
+    """递归序列化单个值"""
+    if isinstance(value, Path):
+        return str(value)
+    elif isinstance(value, dict):
+        return {k: _serialize_value(v, None) for k, v in value.items()}
+    elif hasattr(value, '__dataclass_fields__'):
+        # 数据类实例
+        return {
+            f.name: _serialize_value(getattr(value, f.name), f.type)
+            for f in dataclasses.fields(value)
+        }
+    else:
+        return value
+
+
+def _deserialize_value(value: Any, field_type=None) -> Any:
+    """递归反序列化单个值"""
+    if _is_path_field(field_type) and isinstance(value, str):
+        return Path(value)
+    elif _is_dict_field(field_type) and isinstance(value, dict):
+        return value  # 字典保持原样，由上层处理
+    elif isinstance(value, dict) and field_type and hasattr(field_type, '__dataclass_fields__'):
+        # 嵌套数据类
+        instance = field_type.__new__(field_type)
+        for key, val in value.items():
+            if key in field_type.__dataclass_fields__:
+                ft = field_type.__dataclass_fields__[key].type
+                setattr(instance, key, _deserialize_value(val, ft))
+        return instance
+    else:
+        return value
+
 
 @dataclass
 class BasicConfig:
@@ -65,7 +115,7 @@ class BasicConfig:
         self.validate_config()
 
     def _setup_directories(self):
-        self.root_dir = Path.cwd().parent / 'results' / f'{self.env_name}-{self.daytime}'
+        self.root_dir = Path.cwd() / 'results' / f'{self.env_name}-{self.daytime}'
         self.config_dir = self.root_dir / 'configs'
         self.log_dir = self.root_dir / 'logs'
         self.save_dir = self.root_dir / 'models'
@@ -107,6 +157,7 @@ class BasicConfig:
         print(f"   - Batch size: {self.batch_size}")
         print(f"==========================================================")
 
+
 @dataclass
 class PPOConfig(BasicConfig):
     algorithm: str = 'PPO'
@@ -128,9 +179,7 @@ class PPOConfig(BasicConfig):
 
     @property
     def hyper_params(self):
-        # return a dict
         orin = super().hyper_params
-
         orin.update({
             'num_epochs': self.num_epochs,
             'actor_lr': self.actor_lr,
@@ -142,27 +191,29 @@ class PPOConfig(BasicConfig):
             'lambda_gae_adv': self.lambda_gae_adv,
             'value_coef': self.value_coef,
         })
-
         return orin
 
     def validate_config(self):
         super().validate_config()
-
         errors = []
-        if self.num_envs * self.horizon_len % self.batch_size != 0: errors.append(
-            f"Batch_size: {self.batch_size} is not a factor of num_envs*horizon_len: {self.num_envs}*{self.horizon_len}"
-        )
+        total_steps = self.num_envs * self.horizon_len
+        if total_steps % self.batch_size != 0:
+            errors.append(
+                f"Batch_size: {self.batch_size} is not a factor of num_envs*horizon_len: {total_steps}"
+            )
 
         if errors:
             raise ValueError("Config validation failed:\n" + "\n".join(errors))
 
+        if not (3 <= self.num_epochs <= 10):
+            warnings.warn('num_epochs is not in the range [3,10], which is suggested by PPO paper')
 
-        if self.num_epochs>10 or self.num_epochs<3:
-            warnings.warn(f'num_epochs is not in the range of [3,10], which is a suggested range given by PPO paper')
 
 @dataclass
 class DQNConfig(BasicConfig):
     algorithm: str = 'DQN'
+    is_on_policy: bool = False
+    batch_size: int = 128
     target_update_freq: int = 1000
     epsilon_start: float = 1.0
     epsilon_end: float = 0.01
@@ -171,94 +222,48 @@ class DQNConfig(BasicConfig):
     def __post_init__(self):
         super().__post_init__()
 
-# Qwen3 Contributions
-def config_to_dict(config: BasicConfig):
+
+# =========================
+# 配置序列化与反序列化工具
+# =========================
+
+def config_to_dict(config: BasicConfig) -> Dict[str, Any]:
+    """将配置对象序列化为字典，保留类型信息用于还原"""
     data = {}
     for field in dataclasses.fields(config):
         value = getattr(config, field.name)
+        data[field.name] = _serialize_value(value, field.type)
 
-        # 特殊处理Path对象
-        if isinstance(value, Path):
-            value = str(value)
-
-        # 特殊处理字典对象（包括options和其他Dict字段）
-        elif isinstance(value, dict):
-            # 递归处理字典中的Path对象
-            value = _serialize_dict(value)
-
-        # 递归处理嵌套配置对象（如果未来有）
-        elif hasattr(value, '__dataclass_fields__'):
-            value = {k: str(v) if isinstance(v, Path) else _serialize_dict(v) if isinstance(v, dict) else v
-                     for k, v in value.__dict__.items()}
-
-        data[field.name] = value
-
-    # 添加类标识信息用于类型还原
-    data['__config_class__'] = (
-        f"{config.__class__.__module__}.{config.__class__.__name__}"
-    )
+    # 添加类标识
+    data['__config_class__'] = f"{config.__class__.__module__}.{config.__class__.__name__}"
     return data
 
+
 def save_config(config: BasicConfig, path: Union[str, Path] = None) -> None:
+    """保存配置到 YAML 文件"""
+    path = Path(path) if path else config.config_dir / f'{config.algorithm}_{config.daytime}.yaml'
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-    if path:
-        path = Path(path)
-    else:
-        path = config.config_dir / f'{config.algorithm}_{config.daytime}.yaml'
-
-    # 准备可序列化的字典
     data = config_to_dict(config)
-
-    # 保存到YAML
-    with path.open('w') as f:
-        yaml.dump(data, f, sort_keys=False, default_flow_style=False)
+    with path.open('w', encoding='utf-8') as f:
+        yaml.dump(data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
     logger.info(f"Config saved to {path}")
-
-def _serialize_dict(d: Dict[str, Any]) -> Dict[str, Any]:
-    """递归序列化字典，处理嵌套的字典和Path对象"""
-    result = {}
-    for k, v in d.items():
-        if isinstance(v, Path):
-            result[k] = str(v)
-        elif isinstance(v, dict):
-            result[k] = _serialize_dict(v)
-        elif hasattr(v, '__dataclass_fields__'):
-            # 如果字典值是数据类实例，也进行序列化
-            nested_dict = {}
-            for field_name in dataclasses.fields(v):
-                field_value = getattr(v, field_name.name)
-                if isinstance(field_value, Path):
-                    nested_dict[field_name.name] = str(field_value)
-                elif isinstance(field_value, dict):
-                    nested_dict[field_name.name] = _serialize_dict(field_value)
-                else:
-                    nested_dict[field_name.name] = field_value
-            result[k] = nested_dict
-        else:
-            result[k] = v
-    return result
 
 
 def load_config(path: Union[str, Path]) -> BasicConfig:
-    """
-    从YAML文件加载配置实例
-    自动还原原始配置类类型
-    """
+    """从 YAML 文件加载配置实例"""
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
 
-    # 加载YAML数据
-    with path.open('r') as f:
+    with path.open('r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
 
     if not data or '__config_class__' not in data:
         raise ValueError("Invalid config file format - missing class identifier")
 
-    # 提取类信息并移除特殊键
     class_path = data.pop('__config_class__')
 
-    # 动态导入配置类
     try:
         module_name, class_name = class_path.rsplit('.', 1)
         module = importlib.import_module(module_name)
@@ -266,101 +271,44 @@ def load_config(path: Union[str, Path]) -> BasicConfig:
     except (ImportError, AttributeError) as e:
         raise ImportError(f"Failed to load config class '{class_path}': {e}")
 
-    # 创建实例（绕过__init__，直接设置属性）
+    # 创建实例并设置属性
     config = config_class.__new__(config_class)
-
-    # 设置所有属性（包括init=False的字段）
     for key, value in data.items():
         if key in config_class.__dataclass_fields__:
             field_type = config_class.__dataclass_fields__[key].type
+            setattr(config, key, _deserialize_value(value, field_type))
 
-            # 特殊处理Path字段
-            if field_type is Path and isinstance(value, str):
-                value = Path(value)
-
-            # 特殊处理字典字段（包括options和其他Dict字段）
-            elif (hasattr(field_type, '__origin__') and
-                  field_type.__origin__ is dict) or \
-                 (isinstance(field_type, type) and issubclass(field_type, dict)):
-                value = _deserialize_dict(value)
-
-            # 处理嵌套配置（如果未来有）
-            elif isinstance(value, dict) and hasattr(config_class, key):
-                nested_config = getattr(config, key)
-                if hasattr(nested_config, '__dataclass_fields__'):
-                    for nk, nv in value.items():
-                        if nk in nested_config.__dataclass_fields__:
-                            field_type = nested_config.__dataclass_fields__[nk].type
-                            if field_type is Path and isinstance(nv, str):
-                                nv = Path(nv)
-                            elif (hasattr(field_type, '__origin__') and
-                                  field_type.__origin__ is dict) or \
-                                 (isinstance(field_type, type) and issubclass(field_type, dict)):
-                                nv = _deserialize_dict(nv)
-                            setattr(nested_config, nk, nv)
-                    continue
-
-            setattr(config, key, value)
-
-    # 确保__post_init__被调用
+    # 调用 __post_init__
     if hasattr(config, '__post_init__'):
         config.__post_init__()
 
     logger.info(f"Config loaded from {path} as {config_class.__name__}")
     return config
 
-def _deserialize_dict(d: Dict[str, Any]) -> Dict[str, Any]:
-    """递归反序列化字典，还原嵌套的字典和Path对象"""
-    result = {}
-    for k, v in d.items():
-        if isinstance(v, str):
-            # 尝试将字符串转换为Path对象（如果它看起来像路径）
-            # 这里我们假设所有字符串都可能是路径，根据实际需求调整
-            # 为了更精确，我们只处理以特定模式结尾的字符串
-            result[k] = v
-        elif isinstance(v, dict):
-            result[k] = _deserialize_dict(v)
-        else:
-            result[k] = v
-    return result
 
 def mkdir_from_cfg(cfg: BasicConfig):
+    """确保所有日志/模型/配置目录存在"""
     for d in [cfg.log_dir, cfg.save_dir, cfg.config_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
-def wrap_config_from_dict(config: BasicConfig, update_dict: Dict[str, Any]) -> Any:
-    """
-    根据字典更新配置实例
-    只更新配置类中存在的字段，自动处理Path类型转换
-    """
 
+def wrap_config_from_dict(config: BasicConfig, update_dict: Dict[str, Any]) -> BasicConfig:
+    """
+    根据字典更新配置实例，仅更新存在的字段，自动处理类型转换
+    """
     for key, value in update_dict.items():
         if not hasattr(config, key):
             logger.warning(f"Skipping unknown config field: {key}")
             continue
 
-        # 获取字段类型
-        field_type = type(getattr(config, key))
+        field_type = config.__dataclass_fields__.get(key).type
+        setattr(config, key, _deserialize_value(value, field_type))
 
-        # 自动转换Path类型
-        if field_type is Path and isinstance(value, str):
-            value = Path(value)
-        elif field_type is str and isinstance(value, Path):
-            value = str(value)
-
-        # 递归处理嵌套配置（如果未来有）
-        if hasattr(value, 'items') and hasattr(config, key):
-            nested_config = getattr(config, key)
-            if hasattr(nested_config, '__dataclass_fields__'):
-                wrap_config_from_dict(nested_config, value)
-                continue
-
-        setattr(config, key, value)
-
-    # 重新验证配置
+    # 重新验证和初始化
     if hasattr(config, 'validate_config'):
         config.validate_config()
+    if hasattr(config, '__post_init__'):
+        config.__post_init__()
 
     logger.info("Config updated from dictionary")
-    config.__post_init__()
     return config

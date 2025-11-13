@@ -34,6 +34,7 @@ def make_vec_env(cfg, render_mode=None, wrappers=None):
 
     action_dim = envs.single_action_space.n if cfg.is_discrete else envs.single_action_space.shape[0]
     cfg.set_env_dim(envs.single_observation_space.shape[0], action_dim)
+    envs.reset(seed=cfg.seed)
     return envs
 
 def build_logger(cfg):
@@ -55,16 +56,16 @@ def build_agent(cfg):
     return agent
 
 def train_agent(envs, eval_env, cfg, model_path: Path =None):
+    # info
+    cfg.print_info()
+    mkdir_from_cfg(cfg)
+    save_config(cfg)
+
     # agent
     agent = build_agent(cfg)
 
     if model_path:
         agent.load_model(model_path)
-
-    # info
-    cfg.print_info()
-    mkdir_from_cfg(cfg)
-    save_config(cfg)
 
     # train
     start_steps = agent.steps
