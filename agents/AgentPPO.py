@@ -227,7 +227,7 @@ class CriticPPO(nn.Module):
 
 from modules.CustomModule import TopKMoE
 class ActorPPO(nn.Module):
-    def __init__(self, observation_dim, action_dim, dims, is_discrete, if_moe = True):
+    def __init__(self, observation_dim, action_dim, dims, is_discrete, if_moe = False):
         super().__init__()
         self.is_discrete = is_discrete
         dims = [observation_dim, *dims]
@@ -245,7 +245,7 @@ class ActorPPO(nn.Module):
             OrderedDict(
                 {
                     'feature_extractor': FlattenExtractor(dims),
-                    'experts': TopKMoE([dims[-1],dims[-1]], 4, 4),
+                    'experts': TopKMoE([dims[-1],dims[-1]], 2, 1),
                     'policy_head': DiscretePolicyHead([dims[-1], action_dim]) if is_discrete
                     else ContinuousPolicyHead([dims[-1], action_dim]),
                 }

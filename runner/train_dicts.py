@@ -36,13 +36,13 @@ BipedalWalker_v3_dict = {
     'activation': 'relu',
 
     'horizon_len': 1024,
-    'num_envs': 12,
-    'batch_size': 2048,
-    'entropy_coef': 0.005,
+    'num_envs': 16,
+    'batch_size': 1024,
+    'entropy_coef': 0.001,
     'clip_ratio': 0.2,
     'value_coef': 0.5,
     'lambda_gae_adv': 0.95,
-    'num_epochs': 15,
+    'num_epochs': 8,
     'max_grad_norm': 0.5,
     'seed': 42,
 
@@ -54,8 +54,8 @@ BipedalWalker_v3_dict = {
 
     'actor_dims': [64, 128, 64],
     'critic_dims': [64, 128, 64],
-    'actor_lr': 6e-4,
-    'critic_lr': 6e-4,
+    'actor_lr': 3e-4,
+    'critic_lr': 3e-4,
 
     'eval_interval': 10,
     'save_interval': 200,

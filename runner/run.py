@@ -58,6 +58,10 @@ def train_agent(envs, eval_env, cfg, model_path: Path =None):
     mkdir_from_cfg(cfg)
     save_config(cfg)
 
+    torch.manual_seed(seed=320)
+    torch.xpu.manual_seed(seed=320)
+    torch.cuda.manual_seed(seed=320)
+
     # agent
     agent = build_agent(cfg)
 
